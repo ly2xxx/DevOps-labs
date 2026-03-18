@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lab 3 (Bonus) - RDS MySQL database with security best practices'
+
+Parameters:
+  DBName:
+    Type: String
+    Description: 'Database name'
+    Default: 'myappdb'
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
+
+  DBUsername:
+    Type: String
+    Description: 'Database admin username'
+    Default: 'admin'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
+
+  DBPassword:
+    Type: String
+    Description: 'Database admin password (min 8 characters)'
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: 'Must contain only alphanumeric characters and be at least 8 characters'
+
+  DBInstanceClass:
+    Type: String
+    Description: 'Database instance type'
+    Default: db.t3.micro
+    AllowedValues:
+      - db.t3.micro
+      - db.t4g.micro
+    ConstraintDescription: 'Must be a valid RDS instance type (free tier eligible)'
+
+  AllocatedStorage:
+    Type: Number
+    Description: 'Allocated storage in GB (free tier: 20GB)'
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+
+Resources:
+  # VPC for RDS
+  DBVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DB-VPC'
+
+  # Two private subnets in different AZs (required for RDS subnet group)
+  DBSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DBVPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSubnet1'
+
+  DBSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DBVPC
+      CidrBlock: 10.1.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSubnet2'
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref DBSubnet1
+        - !Ref DBSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSubnetGroup'
+
+  # Security Group for RDS
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS MySQL'
+      VpcId: !Ref DBVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.1.0.0/16  # Allow access from within VPC only
+          Description: 'MySQL access from VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSecurityGroup'
+
+  # RDS MySQL Database
+  MyDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot  # Create snapshot before deletion
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql'
+      DBName: !Ref DBName
+      Engine: MySQL
+      EngineVersion: '8.0.35'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: gp2
+      StorageEncrypted: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7  # Keep backups for 7 days
+      PreferredBackupWindow: '03:00-04:00'  # 3-4 AM UTC
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'  # Sunday 4-5 AM UTC
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      PubliclyAccessible: false  # Security best practice
+      MultiAZ: false  # Set to true for production (not free tier)
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-MySQL'
+        - Key: Environment
+          Value: 'lab'
+
+Outputs:
+  DBInstanceIdentifier:
+    Description: 'Database instance identifier'
+    Value: !Ref MyDatabase
+
+  DBEndpoint:
+    Description: 'Database endpoint address'
+    Value: !GetAtt MyDatabase.Endpoint.Address
+
+  DBPort:
+    Description: 'Database port'
+    Value: !GetAtt MyDatabase.Endpoint.Port
+
+  DBName:
+    Description: 'Database name'
+    Value: !Ref DBName
+
+  ConnectionString:
+    Description: 'MySQL connection string (use from within VPC)'
+    Value: !Sub 'mysql -h ${MyDatabase.Endpoint.Address} -P ${MyDatabase.Endpoint.Port} -u ${DBUsername} -p'
+
+  Notes:
+    Description: 'Important notes'
+    Value: 'This database is NOT publicly accessible (security best practice). Connect from EC2 instance in same VPC.'

@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lab 1 - Simple S3 Bucket with encryption and versioning'
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: 'Unique S3 bucket name (must be globally unique!)'
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    ConstraintDescription: 'Bucket name must be lowercase, alphanumeric, and hyphens only'
+
+  Environment:
+    Type: String
+    Description: 'Environment tag'
+    Default: 'dev'
+    AllowedValues:
+      - dev
+      - staging
+      - production
+
+Resources:
+  MyS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref BucketName
+      # Enable versioning for data protection
+      VersioningConfiguration:
+        Status: Enabled
+      # Enable default encryption
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # Add tags for organization
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: CreatedAt
+          Value: !Sub '${AWS::StackName}'
+
+Outputs:
+  BucketName:
+    Description: 'Name of the S3 bucket'
+    Value: !Ref MyS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  BucketArn:
+    Description: 'ARN of the S3 bucket'
+    Value: !GetAtt MyS3Bucket.Arn
+
+  BucketURL:
+    Description: 'S3 bucket URL'
+    Value: !Sub 'https://${MyS3Bucket}.s3.${AWS::Region}.amazonaws.com'
+
+  WebsiteURL:
+    Description: 'S3 static website URL (if enabled)'
+    Value: !Sub 'https://${MyS3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
