@@ -26,23 +26,52 @@ A comprehensive 1-hour tutorial covering:
 
 ---
 
+### GCP Serverless Quick Start
+**Location:** `gcp-quickstart/`
+
+A practical 1-hour tutorial covering:
+- ✅ Cloud Run containerized deployments
+- ✅ Cloud Scheduler cron jobs
+- ✅ Cloud Logging and monitoring
+- ✅ Real project: Streamlit health checker
+
+**Start here:** [gcp-quickstart/START-HERE.md](gcp-quickstart/START-HERE.md)
+
+**What you'll build:**
+- Deploy containerized apps to Cloud Run
+- Schedule tasks with Cloud Scheduler
+- Monitor and log with Cloud Logging
+- Replace local cron jobs with cloud solution
+
+**Time:** ~1 hour (includes real project deployment)  
+**Cost:** $0/month (free tier + $300 credit)
+
+**Real-world project:**
+- Streamlit health checker that wakes sleeping apps
+- Fully containerized and serverless
+- Replaces local Windows cron jobs
+- Production-ready monitoring
+
+---
+
 ## 🚀 Getting Started
 
-1. Clone this repository
-2. Navigate to the lab you want to try
-3. Follow the instructions in each folder's README
+1. Clone this repository (or navigate to `C:\code\DevOps-labs\`)
+2. Choose a lab (AWS or GCP)
+3. Follow the START-HERE.md guide in each folder
 
 ## 📖 Future Labs
 
 More DevOps labs coming soon:
-- Terraform
-- Docker & Kubernetes
+- Terraform (multi-cloud IaC)
+- Docker & Kubernetes (container orchestration)
 - CI/CD pipelines (GitHub Actions, Jenkins)
-- Monitoring & Observability
-- Infrastructure testing
+- Monitoring & Observability (Prometheus, Grafana)
+- Infrastructure testing (Terratest, InSpec)
 
 ---
 
 **Author:** Yang Li  
 **Created:** March 2026  
+**Updated:** March 2026  
 **License:** MIT
