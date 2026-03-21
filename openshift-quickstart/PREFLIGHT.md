@@ -301,6 +301,13 @@ crc cleanup
 crc setup
 ```
 
+### Issue: "Only one usage of each socket address" on port 80 or 443
+**Fix:** Configure CRC to use alternate ingress ports if port 80 or 443 is in use by another application.
+```powershell
+crc config set ingress-http-port 8088
+crc config set ingress-https-port 7443
+```
+
 ### Issue: Can't access OpenShift Local web console
 **Fix:** Add DNS entries
 ```powershell
