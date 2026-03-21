@@ -230,6 +230,7 @@ By the end of this guide, you'll understand:
 All labs use free tier eligible resources:
 - ✅ S3 buckets (first 5GB free)
 - ✅ t2.micro/t3.micro EC2 (750 hours/month free)
+- ✅ ECR (500MB storage/month for 1 year)
 - ✅ CloudFormation (no charge)
 - ✅ Service Catalog (no charge)
 
@@ -238,16 +239,23 @@ All labs use free tier eligible resources:
 ## 📖 Next Steps
 
 After this guide:
-1. **CloudFormation deep dive:**
+1. **Lab 4: ECR (Elastic Container Registry)** - NEW! 🐳
+   - See `lab4-ecr-docker.md` for full walkthrough
+   - Learn Docker image registry with CloudFormation
+   - Build, push, and pull container images
+   - Enable automatic vulnerability scanning
+   - ~30 minutes, free tier eligible
+
+2. **CloudFormation deep dive:**
    - Explore: https://docs.aws.amazon.com/cloudformation/
    - Try: Nested stacks, StackSets, Change Sets
 
-2. **Service Catalog advanced:**
+3. **Service Catalog advanced:**
    - Add constraints (launch constraints, tag update constraints)
    - Create multi-account catalogs (with Organizations)
    - Add approval workflows
 
-3. **Real-world templates:**
+4. **Real-world templates:**
    - Browse AWS Quick Starts: https://aws.amazon.com/quickstart/
    - Explore CloudFormation registry for third-party resources
 
@@ -270,7 +278,10 @@ After this guide:
 
 - `lab1-simple-s3.yaml` - Simple S3 bucket template
 - `lab2-ec2-with-vpc.yaml` - Multi-resource web server
+- `lab2-ec2-with-vpc.md` - Detailed explanation of Lab 2
 - `lab3-rds-database.yaml` - (Bonus) RDS database template
+- `lab4-ecr-docker.yaml` - ECR private Docker registry template
+- `lab4-ecr-docker.md` - Complete ECR lab walkthrough with Docker
 - `cheatsheet.md` - Quick reference commands
 
 ---

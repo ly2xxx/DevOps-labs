@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lab 4: ECR (Elastic Container Registry) - Create a private Docker registry with lifecycle policies'
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: my-app-repo
+    Description: Name for your ECR repository
+    AllowedPattern: (?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*
+    ConstraintDescription: Repository name must be lowercase, alphanumeric with .-_/ separators
+
+  EnableImageScanning:
+    Type: String
+    Default: 'true'
+    Description: Enable automatic vulnerability scanning for pushed images
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  MaxImageCount:
+    Type: Number
+    Default: 5
+    Description: Maximum number of images to retain (older images auto-deleted)
+    MinValue: 1
+    MaxValue: 100
+
+Resources:
+  # ECR Repository
+  MyECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref EnableImageScanning
+      ImageTagMutability: MUTABLE  # Allows tags like 'latest' to be overwritten
+      EncryptionConfiguration:
+        EncryptionType: AES256  # Encrypt images at rest (free tier compatible)
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only ${MaxImageCount} most recent images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": ${MaxImageCount}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-repository
+        - Key: Environment
+          Value: Development
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Repository Policy - Allow cross-account pull (optional, commented out by default)
+  # Uncomment if you need to share images with other AWS accounts
+  # MyRepositoryPolicy:
+  #   Type: AWS::ECR::RepositoryPolicy
+  #   Properties:
+  #     RepositoryName: !Ref MyECRRepository
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AllowCrossAccountPull
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: arn:aws:iam::123456789012:root  # Replace with target account ID
+  #           Action:
+  #             - ecr:GetDownloadUrlForLayer
+  #             - ecr:BatchGetImage
+  #             - ecr:BatchCheckLayerAvailability
+
+Outputs:
+  RepositoryUri:
+    Description: ECR Repository URI (use for docker tag/push commands)
+    Value: !GetAtt MyECRRepository.RepositoryUri
+    Export:
+      Name: !Sub ${AWS::StackName}-RepositoryUri
+
+  RepositoryArn:
+    Description: ECR Repository ARN
+    Value: !GetAtt MyECRRepository.Arn
+
+  RepositoryName:
+    Description: ECR Repository Name
+    Value: !Ref MyECRRepository
+
+  DockerLoginCommand:
+    Description: AWS CLI command to authenticate Docker with ECR
+    Value: !Sub |
+      aws ecr get-login-password --region ${AWS::Region} | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
+
+  DockerPushInstructions:
+    Description: Quick reference for pushing images
+    Value: !Sub |
+      # 1. Build your image:
+      docker build -t ${RepositoryName}:latest .
+      
+      # 2. Tag for ECR:
+      docker tag ${RepositoryName}:latest ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:latest
+      
+      # 3. Push to ECR:
+      docker push ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:latest
+
+  ConsoleURL:
+    Description: Direct link to view your ECR repository in AWS Console
+    Value: !Sub https://console.aws.amazon.com/ecr/repositories/private/${AWS::AccountId}/${RepositoryName}?region=${AWS::Region}
