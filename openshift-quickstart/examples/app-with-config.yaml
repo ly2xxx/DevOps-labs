@@ -1,0 +1,210 @@
+# Complete Application with ConfigMap and Secret
+# Deploy with: oc apply -f app-with-config.yaml
+
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_NAME: "OpenShift Demo App"
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "info"
+  API_VERSION: "v1"
+
+---
+# Secret for sensitive data (base64 encoded)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  # These are base64 encoded: echo -n "value" | base64
+  # DB_PASSWORD: base64("mypassword")
+  # API_KEY: base64("secret-api-key-12345")
+  DB_PASSWORD: bXlwYXNzd29yZA==
+  API_KEY: c2VjcmV0LWFwaS1rZXktMTIzNDU=
+
+---
+# Deployment using ConfigMap and Secret
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  labels:
+    app: demo-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        
+        # Environment variables from ConfigMap
+        env:
+        - name: APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_NAME
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: LOG_LEVEL
+        
+        # Environment variables from Secret
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_PASSWORD
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: API_KEY
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+# Service to expose the application
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app
+  labels:
+    app: demo-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: demo-app
+
+---
+# Route for external access with TLS
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: demo-app
+  labels:
+    app: demo-app
+spec:
+  to:
+    kind: Service
+    name: demo-app
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# HorizontalPodAutoscaler for automatic scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: demo-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: demo-app
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+# ============================================================================
+# Deployment Instructions:
+# ============================================================================
+#
+# 1. Create project:
+#    oc new-project demo-app
+#
+# 2. Deploy all resources:
+#    oc apply -f app-with-config.yaml
+#
+# 3. Check deployment:
+#    oc get all
+#
+# 4. Get route URL:
+#    oc get route demo-app
+#
+# 5. Test the application:
+#    curl https://<route-url>
+#
+# 6. View environment variables in pod:
+#    POD=$(oc get pod -l app=demo-app -o jsonpath='{.items[0].metadata.name}')
+#    oc exec $POD -- env | grep -E 'APP_NAME|ENVIRONMENT|LOG_LEVEL'
+#
+# 7. View secret values (decoded):
+#    oc get secret app-secrets -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+#
+# 8. Scale manually (HPA will override if CPU threshold hit):
+#    oc scale deployment demo-app --replicas=5
+#
+# 9. Watch autoscaling:
+#    oc get hpa demo-app --watch
+#
+# 10. Cleanup:
+#     oc delete -f app-with-config.yaml
+#
+# ============================================================================
+
+# NOTES:
+# - ConfigMap and Secret are automatically mounted as environment variables
+# - Secrets are base64 encoded (not encrypted - use external secret managers for production)
+# - HPA requires metrics-server to be running (available in OpenShift by default)
+# - Route automatically gets SSL certificate (self-signed in sandbox/local)
+# - Resource limits prevent single pod from consuming too many resources
