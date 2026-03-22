@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: marketing-isolation
+  namespace: marketing-agents
+spec:
+  podSelector:
+    matchLabels:
+      role: marketing
+  
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Ingress rules - who can talk TO marketing agents
+  ingress:
+  # Allow traffic from coordinator namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          role: coordinator
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow traffic from same namespace (inter-agent communication)
+  - from:
+    - podSelector:
+        matchLabels:
+          role: marketing
+  
+  # Egress rules - who marketing agents can talk TO
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # Allow external API calls (e.g., OpenAI, web search)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443    # HTTPS
+    - protocol: TCP
+      port: 80     # HTTP
+  
+  # Allow traffic to coordinator
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          role: coordinator
+  
+  # Allow traffic to shared storage
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 2049   # NFS (if using)

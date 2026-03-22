@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marketing-agent
+  namespace: marketing-agents
+  labels:
+    app: marketing-agent
+    role: marketing
+    team: ai-agents
+spec:
+  replicas: 0  # Start at 0, scale on-demand
+  selector:
+    matchLabels:
+      app: marketing-agent
+      role: marketing
+  template:
+    metadata:
+      labels:
+        app: marketing-agent
+        role: marketing
+        team: ai-agents
+    spec:
+      containers:
+      - name: openclaw-marketing
+        image: openclaw-marketing:latest  # Build this from docker/ folder
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: AGENT_ROLE
+          value: "MARKETING"
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Resource limits - prevent one agent from hogging resources
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"      # 0.25 CPU
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"     # 1 CPU max
+        
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        
+        # Mount shared storage
+        volumeMounts:
+        - name: shared-data
+          mountPath: /workspace/shared
+        - name: agent-config
+          mountPath: /workspace/config
+          readOnly: true
+      
+      # Shared volumes
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: agent-shared-data
+      - name: agent-config
+        configMap:
+          name: marketing-agent-config
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      # Node affinity - prefer worker nodes
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+      
+      # Restart policy
+      restartPolicy: Always
+
+---
+# ConfigMap for marketing agent
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marketing-agent-config
+  namespace: marketing-agents
+data:
+  agent-role.txt: "MARKETING"
+  capabilities.txt: |
+    - Content generation
+    - Campaign analysis
+    - SEO optimization
+    - Social media management
+    - Market research
+  instructions.txt: |
+    Marketing agents focus on:
+    1. Analyzing marketing campaigns
+    2. Generating creative content
+    3. Optimizing SEO strategies
+    4. Managing social media presence
+    5. Conducting market research

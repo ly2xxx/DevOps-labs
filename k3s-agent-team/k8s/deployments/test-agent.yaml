@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-agent
+  namespace: test-agents
+  labels:
+    app: test-agent
+    role: tester
+    team: ai-agents
+spec:
+  replicas: 0  # Start at 0, scale on-demand
+  selector:
+    matchLabels:
+      app: test-agent
+      role: tester
+  template:
+    metadata:
+      labels:
+        app: test-agent
+        role: tester
+        team: ai-agents
+    spec:
+      containers:
+      - name: openclaw-tester
+        image: openclaw-tester:latest
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: AGENT_ROLE
+          value: "TESTER"
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        
+        volumeMounts:
+        - name: shared-data
+          mountPath: /workspace/shared
+        - name: agent-config
+          mountPath: /workspace/config
+          readOnly: true
+      
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: agent-shared-data
+      - name: agent-config
+        configMap:
+          name: test-agent-config
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+      
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-agent-config
+  namespace: test-agents
+data:
+  agent-role.txt: "TESTER"
+  capabilities.txt: |
+    - Test case generation
+    - Automated testing
+    - Bug detection
+    - Quality assurance
+    - Performance testing
+  instructions.txt: |
+    Tester agents focus on:
+    1. Creating comprehensive test plans
+    2. Writing and executing test cases
+    3. Identifying bugs and edge cases
+    4. Ensuring code quality
+    5. Performance and load testing

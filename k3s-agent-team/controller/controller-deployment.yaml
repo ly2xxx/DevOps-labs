@@ -1,0 +1,147 @@
+---
+# ServiceAccount for controller (needs permissions to manage deployments)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-controller
+  namespace: coordinator
+
+---
+# ClusterRole - permissions needed
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-controller-role
+rules:
+# Read/write deployments
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+
+# Read pods (for status checking)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+# Read namespaces
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding - bind role to service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agent-controller-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agent-controller-role
+subjects:
+- kind: ServiceAccount
+  name: agent-controller
+  namespace: coordinator
+
+---
+# Deployment for the controller
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-controller
+  namespace: coordinator
+  labels:
+    app: agent-controller
+    component: orchestration
+spec:
+  replicas: 1  # Single controller instance
+  selector:
+    matchLabels:
+      app: agent-controller
+  template:
+    metadata:
+      labels:
+        app: agent-controller
+        component: orchestration
+    spec:
+      serviceAccountName: agent-controller
+      
+      containers:
+      - name: controller
+        image: agent-controller:latest  # Build from Dockerfile
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - containerPort: 8080
+          name: http
+        
+        env:
+        - name: PORT
+          value: "8080"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      
+      restartPolicy: Always
+
+---
+# Service to expose the controller
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-controller
+  namespace: coordinator
+  labels:
+    app: agent-controller
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: agent-controller
+
+---
+# Optional: Ingress (if you want external access)
+# Uncomment and adjust for your setup
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: agent-controller-ingress
+#   namespace: coordinator
+# spec:
+#   rules:
+#   - host: controller.local
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: agent-controller
+#             port:
+#               number: 8080

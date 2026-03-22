@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: coordinator
+  labels:
+    role: coordinator
+    team: ai-agents
+    environment: production
+    security-level: privileged
+  annotations:
+    description: "Namespace for orchestration controller and shared services"
+    owner: "AI Agent Team"
+    created-by: "k3s-agent-team-setup"
+    special-notes: "This namespace has elevated permissions to manage agent namespaces"

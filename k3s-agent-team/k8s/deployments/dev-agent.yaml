@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-agent
+  namespace: dev-agents
+  labels:
+    app: dev-agent
+    role: developer
+    team: ai-agents
+spec:
+  replicas: 0  # Start at 0, scale on-demand
+  selector:
+    matchLabels:
+      app: dev-agent
+      role: developer
+  template:
+    metadata:
+      labels:
+        app: dev-agent
+        role: developer
+        team: ai-agents
+    spec:
+      containers:
+      - name: openclaw-developer
+        image: openclaw-developer:latest
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: AGENT_ROLE
+          value: "DEVELOPER"
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Developers might need more resources for code analysis
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"     # 2 CPUs max
+        
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep openclaw || exit 1"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        
+        volumeMounts:
+        - name: shared-data
+          mountPath: /workspace/shared
+        - name: agent-config
+          mountPath: /workspace/config
+          readOnly: true
+      
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: agent-shared-data
+      - name: agent-config
+        configMap:
+          name: dev-agent-config
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+      
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-agent-config
+  namespace: dev-agents
+data:
+  agent-role.txt: "DEVELOPER"
+  capabilities.txt: |
+    - Code generation and review
+    - Bug fixing
+    - Architecture design
+    - API development
+    - Documentation writing
+  instructions.txt: |
+    Developer agents focus on:
+    1. Writing clean, maintainable code
+    2. Reviewing and refactoring existing code
+    3. Designing system architecture
+    4. Creating and maintaining documentation
+    5. Implementing features and fixing bugs

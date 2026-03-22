@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-shared-data
+  namespace: coordinator
+  labels:
+    app: shared-storage
+    team: ai-agents
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple agents can mount this
+  storageClassName: local-path  # K3s built-in storage class
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Note: For ReadWriteMany in production, you'd want:
+# - NFS server
+# - Longhorn
+# - Rook/Ceph
+# - Or cloud provider storage (EBS, Azure Disk, etc.)
+#
+# K3s local-path only supports ReadWriteOnce by default.
+# For this demo, we'll need to either:
+# 1. Set up NFS server on one node
+# 2. Use Longhorn (lightweight distributed storage for K3s)
+# 3. Accept ReadWriteOnce and only have one agent access at a time
+#
+# Recommended: Install Longhorn for true ReadWriteMany
+# kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.5.1/deploy/longhorn.yaml
+
+---
+# Alternative: ReadWriteOnce PVC (for single-agent access)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-workspace
+  namespace: coordinator
+  labels:
+    app: workspace-storage
+    team: ai-agents
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one pod can mount
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
