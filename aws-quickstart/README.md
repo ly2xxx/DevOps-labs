@@ -227,26 +227,38 @@ By the end of this guide, you'll understand:
 
 ## 🚨 Free Tier Notes
 
-All labs use free tier eligible resources:
+Labs 1-4 use free tier eligible resources:
 - ✅ S3 buckets (first 5GB free)
 - ✅ t2.micro/t3.micro EC2 (750 hours/month free)
 - ✅ ECR (500MB storage/month for 1 year)
 - ✅ CloudFormation (no charge)
 - ✅ Service Catalog (no charge)
 
+**Lab 5 (Fargate) is NOT free tier:**
+- ⚠️ Fargate charges ~$0.60/hour for 2 tasks
+- ⚠️ Application Load Balancer charges ~$0.02/hour
+- **IMPORTANT:** Delete Lab 5 stack immediately after testing!
+
 **Remember to delete stacks when done!**
 
 ## 📖 Next Steps
 
 After this guide:
-1. **Lab 4: ECR (Elastic Container Registry)** - NEW! 🐳
+1. **Lab 4: ECR (Elastic Container Registry)** 🐳
    - See `lab4-ecr-docker.md` for full walkthrough
    - Learn Docker image registry with CloudFormation
    - Build, push, and pull container images
    - Enable automatic vulnerability scanning
    - ~30 minutes, free tier eligible
 
-2. **CloudFormation deep dive:**
+2. **Lab 5: AWS Fargate (Serverless Containers)** - NEW! 🚀
+   - See `lab5-fargate-ecs.md` for full walkthrough
+   - Deploy containers without managing EC2 instances
+   - Learn ECS, Application Load Balancer, and auto-scaling
+   - Compare Fargate vs EC2 cost/complexity trade-offs
+   - ~45 minutes, ~$0.60/hour (delete when done!)
+
+3. **CloudFormation deep dive:**
    - Explore: https://docs.aws.amazon.com/cloudformation/
    - Try: Nested stacks, StackSets, Change Sets
 
@@ -282,6 +294,8 @@ After this guide:
 - `lab3-rds-database.yaml` - (Bonus) RDS database template
 - `lab4-ecr-docker.yaml` - ECR private Docker registry template
 - `lab4-ecr-docker.md` - Complete ECR lab walkthrough with Docker
+- `lab5-fargate-ecs.yaml` - AWS Fargate serverless containers template
+- `lab5-fargate-ecs.md` - Complete Fargate lab with ECS and ALB
 - `cheatsheet.md` - Quick reference commands
 
 ---

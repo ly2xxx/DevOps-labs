@@ -1,0 +1,409 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lab 5: AWS Fargate - Serverless containers with ECS (no EC2 to manage)'
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: fargate-web-app
+    Description: Name for the ECS service
+    AllowedPattern: ^[a-zA-Z][-a-zA-Z0-9]*$
+    ConstraintDescription: Must start with letter, contain only alphanumeric and hyphens
+
+  ContainerImage:
+    Type: String
+    Default: public.ecr.aws/docker/library/nginx:alpine
+    Description: Docker image to deploy (using public NGINX as example)
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: Port the container listens on
+    MinValue: 1
+    MaxValue: 65535
+
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: Number of tasks to run
+    MinValue: 1
+    MaxValue: 10
+
+  TaskCpu:
+    Type: String
+    Default: '256'
+    Description: CPU units for the task (256 = 0.25 vCPU)
+    AllowedValues:
+      - '256'   # 0.25 vCPU
+      - '512'   # 0.5 vCPU
+      - '1024'  # 1 vCPU
+      - '2048'  # 2 vCPU
+
+  TaskMemory:
+    Type: String
+    Default: '512'
+    Description: Memory for the task in MB
+    AllowedValues:
+      - '512'   # 0.5 GB
+      - '1024'  # 1 GB
+      - '2048'  # 2 GB
+      - '4096'  # 4 GB
+
+Resources:
+  # ========================================
+  # VPC and Networking
+  # ========================================
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnet 1 (for Fargate tasks and ALB)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet1
+
+  # Public Subnet 2 (for high availability)
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet2
+
+  # Route Table for public subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicRT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ========================================
+  # Security Groups
+  # ========================================
+
+  # ALB Security Group (allows HTTP from internet)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic to ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB-SG
+
+  # Fargate Task Security Group (allows traffic from ALB only)
+  TaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from ALB to Fargate tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow traffic from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound (for pulling images, etc.)
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Task-SG
+
+  # ========================================
+  # Application Load Balancer
+  # ========================================
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AWS::StackName}-ALB
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-TG
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip  # Important: Fargate requires 'ip' target type
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-TG
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ========================================
+  # ECS Cluster and Fargate Service
+  # ========================================
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${AWS::StackName}-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT  # Cheaper spot instances for non-critical workloads
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+          Base: 1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-cluster
+
+  # Task Execution Role (allows ECS to pull images and write logs)
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-TaskExecutionRole
+
+  # Task Role (permissions the container can use)
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      # Add policies here if your container needs AWS access (S3, DynamoDB, etc.)
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-TaskRole
+
+  # CloudWatch Log Group for container logs
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AWS::StackName}
+      RetentionInDays: 7  # Free tier: 5GB storage, keep for 1 week
+
+  # ECS Task Definition (defines the container)
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-task
+      NetworkMode: awsvpc  # Required for Fargate
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref ContainerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # Optional: Environment variables
+          # Environment:
+          #   - Name: ENV_VAR_NAME
+          #     Value: env_var_value
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-task
+
+  # ECS Service (runs and maintains desired number of tasks)
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener  # Ensure ALB listener exists before service
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED  # Tasks get public IPs (can pull from internet)
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup
+      HealthCheckGracePeriodSeconds: 60  # Allow time for tasks to start
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-service
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-ALB-DNS
+
+  LoadBalancerURL:
+    Description: URL to access your application
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+
+  ClusterName:
+    Description: ECS Cluster name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterName
+
+  ServiceName:
+    Description: ECS Service name
+    Value: !GetAtt ECSService.Name
+
+  TaskDefinitionArn:
+    Description: Task Definition ARN
+    Value: !Ref TaskDefinition
+
+  LogGroupName:
+    Description: CloudWatch Log Group for container logs
+    Value: !Ref LogGroup
+
+  SecurityGroupId:
+    Description: Security Group ID for Fargate tasks
+    Value: !Ref TaskSecurityGroup
+
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+
+# ================================================================================
+# Cost Estimation (Free Tier Eligible Components):
+# ================================================================================
+# 
+# Fargate Pricing (per vCPU-hour and GB-hour):
+#   - 0.25 vCPU + 0.5 GB RAM: ~$0.01448/hour/task
+#   - 2 tasks running 24/7: ~$21/month
+#   - Spot pricing: ~50% discount
+#
+# ALB Pricing:
+#   - $0.0225/hour (~$16.20/month)
+#   - $0.008/LCU-hour (minimal for testing)
+#
+# Data Transfer:
+#   - First 1 GB out free
+#   - Then $0.09/GB
+#
+# CloudWatch Logs:
+#   - Free tier: 5 GB ingestion, 5 GB storage
+#
+# Total estimated cost for this lab (2 tasks, 24/7):
+#   - ~$40-50/month if left running
+#   - ~$0.60-0.70/hour if running only during testing
+#
+# RECOMMENDATION: Delete stack when not in use to avoid charges!
+#
+# ================================================================================
