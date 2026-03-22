@@ -1,0 +1,12 @@
+{
+  "name": "webapp-helm-nexus",
+  "version": "1.0.0",
+  "description": "Sample web app for Helm + Nexus lab",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["openshift", "helm", "nexus"],
+  "author": "OpenShift Labs",
+  "license": "MIT"
+}

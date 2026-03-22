@@ -1,0 +1,15 @@
+apiVersion: v2
+name: webapp
+description: A GitOps-enabled web application for Helm + ArgoCD lab
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - openshift
+  - helm
+  - argocd
+  - gitops
+maintainers:
+  - name: OpenShift Labs
+annotations:
+  argocd: enabled

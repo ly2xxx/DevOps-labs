@@ -1,0 +1,53 @@
+# Default values for webapp (dev environment)
+
+replicaCount: 1
+
+image:
+  repository: node
+  tag: "18-alpine"
+  pullPolicy: IfNotPresent
+
+environment: development
+appName: webapp
+
+service:
+  type: ClusterIP
+  port: 8080
+
+route:
+  enabled: true
+  host: ""  # Auto-generated if empty
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+env:
+  - name: PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: "development"
+  - name: APP_NAME
+    value: "webapp"
+  - name: VERSION
+    value: "1.0.0"
+
+livenessProbe:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# ArgoCD annotations
+annotations:
+  argocd.argoproj.io/tracking-id: "webapp-gitops"

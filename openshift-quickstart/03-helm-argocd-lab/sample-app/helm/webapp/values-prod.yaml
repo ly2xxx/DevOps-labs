@@ -1,0 +1,23 @@
+# Production environment overrides (GitOps)
+
+replicaCount: 3
+
+environment: production
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+  requests:
+    cpu: 1000m
+    memory: 512Mi
+
+env:
+  - name: PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: "production"
+  - name: APP_NAME
+    value: "webapp-prod-gitops"
+  - name: VERSION
+    value: "1.0.0"

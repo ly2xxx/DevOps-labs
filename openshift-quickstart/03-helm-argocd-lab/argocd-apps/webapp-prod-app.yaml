@@ -1,0 +1,37 @@
+# ArgoCD Application for PROD environment
+# Apply this to deploy webapp-prod via GitOps
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: webapp-prod
+  namespace: argocd
+  labels:
+    environment: production
+spec:
+  project: default
+  
+  # Source
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/argocd-demo-app.git  # ⚠️ UPDATE THIS!
+    targetRevision: HEAD  # Consider using 'v1.0.0' tag for prod stability
+    path: helm/webapp
+    helm:
+      valueFiles:
+        - values-prod.yaml
+  
+  # Destination
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: webapp-prod
+  
+  # Sync Policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  
+  # Prod-specific: Require manual approval for sync (optional)
+  # Comment out 'automated' above and use manual sync for prod if needed

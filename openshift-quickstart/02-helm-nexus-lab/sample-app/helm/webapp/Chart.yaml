@@ -1,0 +1,12 @@
+apiVersion: v2
+name: webapp
+description: A simple web application for Helm + Nexus lab
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - openshift
+  - helm
+  - nexus
+maintainers:
+  - name: OpenShift Labs
