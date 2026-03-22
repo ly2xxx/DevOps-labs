@@ -44,6 +44,7 @@ By the end of this lab, you'll be able to:
 - [ ] Docker (optional, for Nexus local setup)
 
 **Check your setup:**
+
 ```bash
 oc version
 helm version
@@ -57,12 +58,14 @@ docker version  # Optional
 ### Step 1: Understand the Sample App
 
 We'll deploy a simple **web application** with:
+
 - Node.js web server
 - ConfigMap for configuration
 - Service and Route
 - Multiple environment configurations
 
 **App structure:**
+
 ```
 sample-app/
 ├── app/
@@ -87,6 +90,7 @@ sample-app/
 ### Step 2: Create the Helm Chart
 
 **Navigate to the sample app:**
+
 ```bash
 cd C:\code\DevOps-labs\openshift-quickstart\02-helm-nexus-lab\sample-app
 ```
@@ -94,16 +98,19 @@ cd C:\code\DevOps-labs\openshift-quickstart\02-helm-nexus-lab\sample-app
 The Helm chart is already created for you. Review the files:
 
 **Chart.yaml:**
+
 ```bash
 cat helm/webapp/Chart.yaml
 ```
 
 **values.yaml (default - dev environment):**
+
 ```bash
 cat helm/webapp/values.yaml
 ```
 
 **Deployment template:**
+
 ```bash
 cat helm/webapp/templates/deployment.yaml
 ```
@@ -113,6 +120,7 @@ cat helm/webapp/templates/deployment.yaml
 ### Step 3: Package the Helm Chart
 
 **Package the chart:**
+
 ```bash
 cd helm
 
@@ -123,11 +131,13 @@ helm package webapp/
 ```
 
 **Verify package:**
+
 ```bash
 ls -l *.tgz
 ```
 
 Expected output:
+
 ```
 webapp-1.0.0.tgz
 ```
@@ -139,6 +149,7 @@ webapp-1.0.0.tgz
 #### **Option A: Use Existing Nexus** (Production)
 
 If your organization has Nexus:
+
 ```bash
 # Configure Helm to use Nexus
 helm repo add my-nexus https://nexus.company.com/repository/helm-releases/ \
@@ -154,6 +165,7 @@ helm repo add my-nexus https://nexus.company.com/repository/helm-releases/ \
 #### **Option B: Local Nexus with Docker** (Development)
 
 **Start Nexus locally:**
+
 ```bash
 # Run Nexus in Docker
 docker run -d -p 8081:8081 --name nexus sonatype/nexus3
@@ -166,6 +178,7 @@ docker logs -f nexus
 ```
 
 **Initial Nexus setup:**
+
 1. Open browser: `http://localhost:8081`
 2. Click "Sign in"
 3. Get admin password:
@@ -178,6 +191,7 @@ docker logs -f nexus
 5. Change password when prompted
 
 **Create Helm repository:**
+
 1. Click ⚙️ (Settings) → Repositories
 2. Click "Create repository"
 3. Select "helm (hosted)"
@@ -185,6 +199,7 @@ docker logs -f nexus
 5. Click "Create repository"
 
 **Add to Helm:**
+
 ```bash
 helm repo add my-nexus http://localhost:8081/repository/helm-releases/ \
   --username admin \
@@ -260,6 +275,7 @@ helm search repo webapp
 ### Step 7: Deploy from Nexus to OpenShift
 
 **Login to OpenShift:**
+
 ```bash
 # Using CRC
 eval $(crc oc-env)
@@ -270,11 +286,13 @@ oc login --token=<your-token> --server=https://api.cluster.com:6443
 ```
 
 **Create project:**
+
 ```bash
 oc new-project webapp-dev
 ```
 
 **Deploy DEV environment:**
+
 ```bash
 # Install from Nexus
 helm install webapp my-nexus/webapp \
@@ -290,6 +308,7 @@ helm install webapp my-nexus/webapp \
 ```
 
 **Verify deployment:**
+
 ```bash
 # Check Helm release
 helm list -n webapp-dev
@@ -302,6 +321,7 @@ oc get route -n webapp-dev
 ```
 
 **Access the app:**
+
 ```bash
 # Get the route URL
 APP_URL=$(oc get route webapp -n webapp-dev -o jsonpath='{.spec.host}')
@@ -316,11 +336,13 @@ curl http://$APP_URL
 ### Step 8: Deploy PROD Environment
 
 **Create prod project:**
+
 ```bash
 oc new-project webapp-prod
 ```
 
 **Deploy PROD configuration:**
+
 ```bash
 # Deploy same chart, different values
 helm install webapp my-nexus/webapp \
@@ -335,6 +357,7 @@ helm install webapp my-nexus/webapp \
 ```
 
 **Verify:**
+
 ```bash
 helm list -n webapp-prod
 oc get all -n webapp-prod
@@ -347,6 +370,7 @@ oc get all -n webapp-prod
 **Scenario: You fixed a bug, need to release v1.1.0**
 
 **Update Chart.yaml:**
+
 ```yaml
 # helm/webapp/Chart.yaml
 apiVersion: v2
@@ -357,6 +381,7 @@ description: A simple web application
 ```
 
 **Package new version:**
+
 ```bash
 cd helm
 helm package webapp/
@@ -365,6 +390,7 @@ helm package webapp/
 ```
 
 **Upload to Nexus:**
+
 ```bash
 curl -u admin:<password> \
   --upload-file webapp-1.1.0.tgz \
@@ -372,6 +398,7 @@ curl -u admin:<password> \
 ```
 
 **Update repo and upgrade:**
+
 ```bash
 helm repo update
 
@@ -386,6 +413,11 @@ helm upgrade webapp my-nexus/webapp \
   --namespace webapp-prod \
   --version 1.1.0 \
   --values helm/webapp/values-prod.yaml
+
+# Or upgrade from local file
+helm upgrade --install webapp webapp-1.1.0.tgz \
+  --namespace webapp-prod \
+  --values webapp/values-prod.yaml
 ```
 
 ---
@@ -401,6 +433,10 @@ helm rollback webapp -n webapp-prod
 
 # Or rollback to specific revision
 helm rollback webapp 1 -n webapp-prod
+
+# This deletes the Deployment, Service, Route AND the Helm record
+helm uninstall webapp --namespace webapp-prod
+
 ```
 
 ---
@@ -452,16 +488,18 @@ After completing the lab, verify:
 ## 💡 Key Takeaways
 
 ### **Pros of Helm + Nexus:**
-✅ **Centralized artifact storage** - Single source for all charts  
-✅ **Version control** - Immutable artifacts with clear versions  
-✅ **Security scanning** - Scan charts before deployment  
-✅ **Reproducibility** - Same artifact, guaranteed  
-✅ **Offline capability** - Download once, deploy many times  
+
+✅ **Centralized artifact storage** - Single source for all charts
+✅ **Version control** - Immutable artifacts with clear versions
+✅ **Security scanning** - Scan charts before deployment
+✅ **Reproducibility** - Same artifact, guaranteed
+✅ **Offline capability** - Download once, deploy many times
 
 ### **Cons:**
-❌ **Manual process** - Developers must package, upload, deploy  
-❌ **No automatic sync** - Changes require manual intervention  
-❌ **No drift detection** - Manual changes aren't corrected  
+
+❌ **Manual process** - Developers must package, upload, deploy
+❌ **No automatic sync** - Changes require manual intervention
+❌ **No drift detection** - Manual changes aren't corrected
 
 ---
 
@@ -476,6 +514,7 @@ After completing the lab, verify:
 ## 🔧 Troubleshooting
 
 ### **Issue: Nexus not accessible**
+
 ```bash
 # Check Nexus status
 docker ps | grep nexus
@@ -486,6 +525,7 @@ docker restart nexus
 ```
 
 ### **Issue: helm repo add fails**
+
 ```bash
 # Check Nexus is running
 curl http://localhost:8081
@@ -498,6 +538,7 @@ helm repo add my-nexus https://nexus.local/repository/helm-releases/ \
 ```
 
 ### **Issue: Chart not found after upload**
+
 ```bash
 # Rebuild Nexus index
 # In Nexus UI: Browse → helm-releases → Rebuild index
