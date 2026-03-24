@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Docker DX: Debug Dockerfile (Both)",
+            "type": "docker-build",
+            "request": "launch",
+            "dockerfile": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder/Dockerfile.with-both",
+            "context": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder"
+        },
+        {
+            "name": "Docker DX: Debug Dockerfile (Claude Only)",
+            "type": "docker-build",
+            "request": "launch",
+            "dockerfile": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder/Dockerfile.with-claude-code",
+            "context": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder"
+        }
+    ]
+}
