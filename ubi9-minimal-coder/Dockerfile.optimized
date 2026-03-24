@@ -1,0 +1,55 @@
+# UBI9-Minimal Coder Template - ULTRA OPTIMIZED
+# Purpose: Absolute minimal image for Claude Code skill hosting
+# Target Size: <150MB
+# Strategy: Multi-stage build to minimize final image
+
+# ============================================================
+# Stage 1: Builder (install dependencies)
+# ============================================================
+FROM registry.access.redhat.com/ubi9/ubi:latest AS builder
+
+# Install Python and pip in builder stage
+RUN dnf install -y python3.11 python3.11-pip && \
+    dnf clean all
+
+# Install Claude Code and dependencies as user packages
+RUN python3.11 -m pip install --user --no-cache-dir \
+    anthropic \
+    httpx
+
+# ============================================================
+# Stage 2: Runtime (minimal final image)
+# ============================================================
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+LABEL maintainer="Barclays Platform Engineering"
+LABEL description="Ultra-minimal UBI9 for Claude Code (optimized multi-stage)"
+LABEL version="1.0-optimized"
+
+# Install ONLY Python runtime (no pip, no setuptools)
+RUN microdnf install -y python3.11 && \
+    microdnf clean all && \
+    rm -rf /var/cache/yum
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash coder
+
+# Copy Python packages from builder
+COPY --from=builder --chown=coder:coder /root/.local /home/coder/.local
+
+# Set working directory
+WORKDIR /home/coder
+
+# Switch to non-root user
+USER coder
+
+# Environment variables
+ENV PATH="/home/coder/.local/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD python3 --version || exit 1
+
+CMD ["/bin/bash"]

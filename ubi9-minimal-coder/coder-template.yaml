@@ -1,0 +1,129 @@
+# Example Coder Template Configuration
+# For deploying UBI9-minimal templates to Coder platform
+
+apiVersion: v1
+kind: Template
+metadata:
+  name: ubi9-python-minimal
+  displayName: "UBI9 Python (Minimal)"
+  description: "Optimized UBI9-minimal with Python 3.11 for Claude Code skill hosting"
+  icon: "🐍"
+  tags:
+    - python
+    - ubi9
+    - minimal
+    - claude-code
+
+spec:
+  # Docker image
+  image: "barclays-registry.io/coder-templates/ubi9-python:1.0"
+  
+  # Resource requests
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  
+  # Security context
+  securityContext:
+    runAsUser: 1000  # coder user
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+  
+  # Environment variables
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PIP_NO_CACHE_DIR
+      value: "1"
+    - name: CODER_WORKSPACE_DIR
+      value: "/home/coder/workspace"
+  
+  # Volume mounts
+  volumeMounts:
+    - name: workspace
+      mountPath: /home/coder/workspace
+  
+  # Default command (override with Coder workspace config)
+  command: ["/bin/bash"]
+  
+  # Health check
+  livenessProbe:
+    exec:
+      command:
+        - python3
+        - --version
+    initialDelaySeconds: 5
+    periodSeconds: 30
+  
+  # Readiness probe
+  readinessProbe:
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - "test -d /home/coder"
+    initialDelaySeconds: 3
+    periodSeconds: 10
+
+---
+# Alternative: For Claude Code pre-installed version
+
+apiVersion: v1
+kind: Template
+metadata:
+  name: ubi9-claude-code
+  displayName: "UBI9 Claude Code (Ready)"
+  description: "UBI9-minimal with Claude Code and MCP packages pre-installed"
+  icon: "🤖"
+  tags:
+    - python
+    - ubi9
+    - claude-code
+    - ai
+
+spec:
+  image: "barclays-registry.io/coder-templates/ubi9-claude:1.0"
+  
+  resources:
+    requests:
+      memory: "768Mi"
+      cpu: "750m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+  
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: ANTHROPIC_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: claude-api-keys
+          key: api-key
+  
+  volumeMounts:
+    - name: workspace
+      mountPath: /home/coder/workspace
+    - name: claude-config
+      mountPath: /home/coder/.config/claude
+  
+  command: ["/bin/bash"]
+  
+  livenessProbe:
+    exec:
+      command:
+        - python3
+        - -c
+        - "import anthropic"
+    initialDelaySeconds: 10
+    periodSeconds: 30

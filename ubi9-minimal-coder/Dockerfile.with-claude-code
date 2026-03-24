@@ -1,0 +1,40 @@
+# UBI9-Minimal Coder Template with Claude Code Pre-installed
+# Purpose: Ready-to-use image with Claude Code CLI (Node.js-based)
+# Target Size: ~250MB (includes Node.js + npm)
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+LABEL maintainer="Barclays Platform Engineering"
+LABEL description="UBI9-minimal with Claude Code CLI pre-installed"
+LABEL version="1.0-claude-fixed"
+
+# Install Node.js (required for Claude Code)
+# UBI9-minimal uses microdnf, so we need nodejs from AppStream
+RUN microdnf install -y \
+    nodejs \
+    npm \
+    && microdnf clean all \
+    && rm -rf /var/cache/yum
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash coder
+
+# Switch to coder user for npm install
+USER coder
+WORKDIR /home/coder
+
+# Install Claude Code globally (as user)
+RUN npm install -g @anthropic-ai/claude-code
+
+# Environment variables
+ENV PATH="/home/coder/.npm-global/bin:${PATH}" \
+    NODE_ENV=production
+
+# Create workspace directory
+RUN mkdir -p /home/coder/workspace
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD claude-code --version || exit 1
+
+CMD ["/bin/bash"]
