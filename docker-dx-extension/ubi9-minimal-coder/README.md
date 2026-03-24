@@ -146,11 +146,11 @@ docker images | findstr coder-template
 docker run -it --rm coder-template:complete
 
 # Inside container:
-claude-code --version    # ✅ Claude Code CLI
+claude --version    # ✅ Claude Code CLI
 node --version           # Node.js runtime
 npm --version            # Package manager
 python3 --version        # For MCP servers
-pip --version            # Python packages
+pip3 --version            # Python packages
 
 # Exit
 exit
@@ -422,7 +422,7 @@ Python's `anthropic` package is only for building custom apps with Claude API, n
 2. **Test Claude Code CLI:**
    ```bash
    docker run -it --rm coder-template:complete
-   claude-code --version
+   claude --version
    ```
 
 ---
