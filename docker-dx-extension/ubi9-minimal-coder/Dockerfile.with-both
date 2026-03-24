@@ -34,7 +34,8 @@ ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
     PIP_NO_CACHE_DIR=1
 
 # Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 # Install common Python MCP dependencies
 RUN python3 -m pip install --user --no-cache-dir \

@@ -30,7 +30,8 @@ ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
     NODE_ENV=production
 
 # Install Claude Code globally (as user)
-RUN npm install -g @anthropic-ai/claude-code
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 
 # Create workspace directory

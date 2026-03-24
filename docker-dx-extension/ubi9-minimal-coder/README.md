@@ -226,6 +226,18 @@ Total:                        ~380MB
 
 ## 🔧 Customization Guide
 
+### Pinning a Specific Claude Code Version
+
+You can now selectively install a specific version of `claude-code` by passing the `CLAUDE_CODE_VERSION` build argument:
+
+```bash
+docker build -t coder-template:complete \
+  --build-arg CLAUDE_CODE_VERSION=2.1.80 \
+  -f Dockerfile.with-both .
+```
+
+---
+
 ### Add Claude Code + Additional npm Packages
 
 ```dockerfile
