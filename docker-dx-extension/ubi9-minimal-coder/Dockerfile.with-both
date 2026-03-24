@@ -1,10 +1,10 @@
 # UBI9-Minimal Coder Template - Complete Version
 # Purpose: Claude Code CLI + Python (for MCP servers)
-# Target Size: ~280MB
+# Target Size: ~527MB
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-LABEL maintainer="Barclays Platform Engineering"
+LABEL maintainer="Super Platform Engineering"
 LABEL description="UBI9-minimal with Claude Code + Python for MCP servers"
 LABEL version="1.0-complete"
 
@@ -14,6 +14,8 @@ RUN microdnf install -y \
     npm \
     python3.11 \
     python3.11-pip \
+    && ln -s /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -s /usr/bin/pip3.11 /usr/bin/pip3 \
     && microdnf clean all \
     && rm -rf /var/cache/yum
 
@@ -24,6 +26,13 @@ RUN useradd -m -u 1000 -s /bin/bash coder
 USER coder
 WORKDIR /home/coder
 
+# Environment variables
+ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
+    PATH="/home/coder/.npm-global/bin:/home/coder/.local/bin:${PATH}" \
+    NODE_ENV=production \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 # Install Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
@@ -32,11 +41,23 @@ RUN python3 -m pip install --user --no-cache-dir \
     anthropic \
     httpx
 
-# Environment variables
-ENV PATH="/home/coder/.npm-global/bin:/home/coder/.local/bin:${PATH}" \
-    NODE_ENV=production \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+# 1. anthropic
+# This is the official Python SDK for the Anthropic API.
+
+# Why it's necessary: If you are building an MCP server that needs to "talk back" to Claude or perform complex reasoning tasks independently of the main CLI, you need this library to authenticate and send requests to Anthropic's models.
+# Use Cases:
+# Orchestration: A Python script acting as a "manager" that sends a prompt to Claude, gets a structured response, and then executes a local command based on that response.
+# Data Enrichment: Taking local data (like logs or code) and sending it to Claude for summarization or bug analysis.
+# Custom Agents: Building specialized AI agents that run alongside the Claude Code CLI.
+# 2. httpx
+# This is a modern, high-performance HTTP client for Python (a successor to the famous requests library).
+
+# Why it's necessary: Most modern MCP servers are written using Python's asyncio (asynchronous programming). httpx is the industry standard for making asynchronous HTTP requests. The requests library is "blocking," which would make an MCP server slow or unresponsive if it's waiting for an API result.
+# Use Cases:
+# Calling External APIs: If your MCP server provides a tool to "Check Jira Status" or "Search Documentation," it uses httpx to fetch that data from the web.
+# Concurrency: Allowing the MCP server to fetch data from three different web sources simultaneously without waiting for them one by one.
+# Streaming: Handling real-time data streams from other services
+
 
 # Create workspace directory
 RUN mkdir -p /home/coder/workspace

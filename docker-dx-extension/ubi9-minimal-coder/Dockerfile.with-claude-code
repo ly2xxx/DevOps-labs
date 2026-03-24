@@ -1,10 +1,10 @@
 # UBI9-Minimal Coder Template with Claude Code Pre-installed
 # Purpose: Ready-to-use image with Claude Code CLI (Node.js-based)
-# Target Size: ~250MB (includes Node.js + npm)
+# Target Size: ~432MB (includes Node.js + npm)
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-LABEL maintainer="Barclays Platform Engineering"
+LABEL maintainer="Super Platform Engineering"
 LABEL description="UBI9-minimal with Claude Code CLI pre-installed"
 LABEL version="1.0-claude-fixed"
 
@@ -23,12 +23,15 @@ RUN useradd -m -u 1000 -s /bin/bash coder
 USER coder
 WORKDIR /home/coder
 
+# Environment variables
+#  Tells npm to install global packages into a folder the coder user actually owns (/home/coder/.npm-global), rather than the system-level /usr/local/lib (which would cause a "Permission Denied" error)
+ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
+    PATH="/home/coder/.npm-global/bin:${PATH}" \
+    NODE_ENV=production
+
 # Install Claude Code globally (as user)
 RUN npm install -g @anthropic-ai/claude-code
 
-# Environment variables
-ENV PATH="/home/coder/.npm-global/bin:${PATH}" \
-    NODE_ENV=production
 
 # Create workspace directory
 RUN mkdir -p /home/coder/workspace
