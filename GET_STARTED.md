@@ -44,10 +44,17 @@ docker run -it --rm coder-template:ubi9-basic
 
 ### 🎯 UBI9-Minimal Case Study
 - **[ubi9-minimal-coder/](ubi9-minimal-coder/)** - Real-world optimization project
-  - Three Dockerfile variants (basic, optimized, claude-code)
+  - Four Dockerfile variants (basic, optimized, claude-code, complete)
   - Automated build and test scripts
   - Complete documentation
   - Example Claude Code skill
+
+### 🤖 Docker DX Extension Lab
+- **[docker-dx-extension/](docker-dx-extension/)** - AI-powered Docker workflows
+  - AI Dockerfile generation
+  - Container insights and debugging
+  - Optimization with AI suggestions
+  - Hands-on demo app included
 
 ### 🛠️ Helper Scripts
 - **test-setup.ps1** - Verify Docker installation

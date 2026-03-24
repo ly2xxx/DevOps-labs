@@ -6,8 +6,9 @@ Practical Docker tutorials with real-world use cases for Barclays platform engin
 
 1. **Docker Fundamentals** - Core concepts and commands
 2. **UBI9-Minimal Coder Template** - Production-ready minimal image case study
-3. **VSCode Debugging** - Debug containerized applications
-4. **Best Practices** - Security, optimization, production patterns
+3. **Docker DX Extension Lab** - AI-powered Docker workflows in VS Code
+4. **VSCode Debugging** - Debug containerized applications
+5. **Best Practices** - Security, optimization, production patterns
 
 ---
 
@@ -24,6 +25,31 @@ Replace bloated general-purpose UBI8 images with optimized UBI9-minimal template
 - ✅ Security: non-root user, minimal attack surface
 
 **See:** `ubi9-minimal-coder/` for complete implementation
+
+---
+
+## 🤖 Docker DX Extension Lab
+
+**Try AI-powered Docker development!**
+
+The new **Docker DX extension** for VS Code provides:
+- 🤖 AI-powered Dockerfile generation
+- 📊 Enhanced container insights
+- 🚀 Simplified workflows
+- 💡 Intelligent optimization suggestions
+
+**Quick Start:**
+```powershell
+# Install extension
+code --install-extension docker.docker-dx
+
+# Try the demo
+cd docker-dx-extension/ai-dockerfile-demo
+code .
+# Press Ctrl+Shift+P → "Docker DX: Generate Dockerfile"
+```
+
+**See:** `docker-dx-extension/` for complete lab and hands-on exercises
 
 ---
 
