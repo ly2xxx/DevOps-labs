@@ -1,0 +1,142 @@
+# HashiCorp Vault Demo Application for OKD
+# This demonstrates Vault Agent Sidecar injection
+#
+# Prerequisites:
+# 1. Vault running and accessible (see VAULT-SECRETS-INTEGRATION.md)
+# 2. Secrets created in Vault at secret/okd-demo/*
+# 3. Vault Agent Injector installed in the cluster
+# 4. Service account 'app-service-account' exists
+#
+# Deploy with: oc apply -f vault-demo-app.yaml
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault-demo
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-service-account
+  namespace: vault-demo
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-demo-app
+  namespace: vault-demo
+  labels:
+    app: vault-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-demo
+  template:
+    metadata:
+      labels:
+        app: vault-demo
+      annotations:
+        # Enable Vault Agent injection
+        vault.hashicorp.com/agent-inject: "true"
+        
+        # Inject database credentials from Vault
+        vault.hashicorp.com/agent-inject-secret-database: "secret/data/okd-demo/database"
+        vault.hashicorp.com/agent-inject-template-database: |
+          {{- with secret "secret/data/okd-demo/database" -}}
+          # Database Configuration (sourced from Vault)
+          export DB_USERNAME="{{ .Data.data.username }}"
+          export DB_PASSWORD="{{ .Data.data.password }}"
+          export DB_HOST="{{ .Data.data.host }}"
+          export DB_PORT="{{ .Data.data.port }}"
+          
+          # JSON format alternative
+          DB_CONNECTION_STRING="postgresql://{{ .Data.data.username }}:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/mydb"
+          {{- end }}
+        
+        # Inject API keys from Vault
+        vault.hashicorp.com/agent-inject-secret-api-keys: "secret/data/okd-demo/api-keys"
+        vault.hashicorp.com/agent-inject-template-api-keys: |
+          {{- with secret "secret/data/okd-demo/api-keys" -}}
+          # API Keys (sourced from Vault)
+          export STRIPE_API_KEY="{{ .Data.data.stripe_key }}"
+          export SENDGRID_API_KEY="{{ .Data.data.sendgrid_key }}"
+          {{- end }}
+        
+        # Inject application config from Vault
+        vault.hashicorp.com/agent-inject-secret-app-config: "secret/data/okd-demo/app-config"
+        vault.hashicorp.com/agent-inject-template-app-config: |
+          {{- with secret "secret/data/okd-demo/app-config" -}}
+          # Application Config (sourced from Vault)
+          export JWT_SECRET="{{ .Data.data.jwt_secret }}"
+          export ENCRYPTION_KEY="{{ .Data.data.encryption_key }}"
+          {{- end }}
+        
+        # Vault role to use for authentication
+        vault.hashicorp.com/role: "okd-demo"
+        
+        # Optional: Preserve case in secret files
+        vault.hashicorp.com/preserve-secret-case: "true"
+        
+    spec:
+      serviceAccountName: app-service-account
+      containers:
+      - name: app
+        image: busybox:latest
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "=========================================="
+            echo "Vault Demo Application Started"
+            echo "=========================================="
+            echo ""
+            echo "Secrets are injected at: /vault/secrets/"
+            echo ""
+            echo "--- Database Credentials ---"
+            cat /vault/secrets/database
+            echo ""
+            echo "--- API Keys ---"
+            cat /vault/secrets/api-keys
+            echo ""
+            echo "--- App Config ---"
+            cat /vault/secrets/app-config
+            echo ""
+            echo "=========================================="
+            echo "Application running. Use 'oc exec' to inspect."
+            echo "Example: oc exec -it <pod-name> -- sh"
+            echo "=========================================="
+            echo ""
+            
+            # Keep container running
+            while true; do
+              echo "[$(date)] App heartbeat - secrets still available"
+              sleep 60
+            done
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-demo-app
+  namespace: vault-demo
+  labels:
+    app: vault-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: vault-demo
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
