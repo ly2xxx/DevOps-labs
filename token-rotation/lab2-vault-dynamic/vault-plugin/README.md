@@ -9,6 +9,9 @@ Simplified HTTP-based Vault plugin for generating dynamic GitLab project access 
 ### Windows (PowerShell)
 
 ```powershell
+# Install Vault (if not already installed)
+winget install HashiCorp.Vault
+
 # Set environment variables
 $env:VAULT_ADDR="http://127.0.0.1:8200"
 $env:VAULT_TOKEN="root"
@@ -94,6 +97,22 @@ $token = $creds.data.token
 # 4. Use token
 $headers = @{"PRIVATE-TOKEN" = $token}
 Invoke-RestMethod -Uri "https://gitlab.com/api/v4/projects/12345" -Headers $headers
+
+# 5. View Roles
+Invoke-RestMethod -Uri "http://localhost:5000/roles"
+
+# Example Output:
+# data
+# ----
+# @{keys=System.Object[]}
+
+# 6. View Specific Role Details
+Invoke-RestMethod -Uri "http://localhost:5000/roles/my-app"
+
+# Example Output:
+# data
+# ----
+# @{created_at=2026-03-26T23:14:54.750482; project_id=6; project_name=lab-01-basic-pipeline; scopes=System.Object[]; ttl=3600}
 ```
 
 ---
