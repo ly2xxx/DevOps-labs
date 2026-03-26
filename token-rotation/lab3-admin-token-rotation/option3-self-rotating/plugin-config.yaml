@@ -1,0 +1,70 @@
+# Enhanced GitLab Secrets Plugin Configuration
+# Self-rotating admin token configuration
+
+gitlab:
+  # GitLab instance URL
+  url: https://gitlab.com
+  
+  # Initial admin token (with 'api' scope)
+  # Plugin will rotate this automatically
+  admin_token: null  # Set via environment or edit here
+  
+  # Token name prefix for auto-created tokens
+  token_name_prefix: "vault-auto"
+
+rotation:
+  # Enable automatic token rotation
+  enabled: true
+  
+  # How often to check if rotation is needed (hours)
+  check_interval_hours: 1
+  
+  # Rotate when token is this many days old
+  rotate_after_days: 80
+  
+  # New tokens expire after this many days
+  token_expiry_days: 90
+  
+  # Keep old token valid for this many hours after rotation
+  grace_period_hours: 48
+  
+  # Maximum retry attempts on rotation failure
+  max_retry_attempts: 3
+  
+  # Minutes to wait between retry attempts
+  retry_interval_minutes: 10
+
+notifications:
+  # Slack webhook URL for notifications (optional)
+  slack_webhook: null
+  
+  # Email notifications (optional)
+  email_to: null
+  smtp_server: null
+  smtp_port: 587
+  email_from: null
+
+plugin:
+  # HTTP server port
+  port: 5000
+  
+  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  log_level: INFO
+  
+  # Log file path
+  log_file: plugin.log
+  
+  # State file for rotation tracking
+  state_file: plugin-state.json
+
+storage:
+  # Storage type: file or vault
+  type: file
+  
+  # Storage path (for file type)
+  path: ./state
+
+# Default TTL settings for generated tokens
+defaults:
+  ttl: 3600      # 1 hour
+  max_ttl: 86400 # 24 hours

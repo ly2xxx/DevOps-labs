@@ -1,0 +1,10 @@
+# Python dependencies for Option 2: Automated Admin Token Rotation
+
+# GitLab API client
+python-gitlab>=4.0.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Utilities
+python-dateutil>=2.8.2

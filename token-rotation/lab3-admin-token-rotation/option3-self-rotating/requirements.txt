@@ -1,0 +1,16 @@
+# Python dependencies for Option 3: Self-Rotating Plugin
+
+# GitLab API client
+python-gitlab>=4.0.0
+
+# Web framework
+flask>=3.0.0
+
+# Configuration file support
+pyyaml>=6.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Utilities
+python-dateutil>=2.8.2

@@ -1,0 +1,312 @@
+# GitLab CI/CD Pipeline for Admin Token Rotation + Vault Sync
+# 
+# This pipeline syncs a rotated GitLab admin token to Vault backend config
+# 
+# Required CI/CD Variables:
+# - VAULT_ADDR: Vault server URL
+# - VAULT_TOKEN: Vault authentication token
+# - NEW_ADMIN_TOKEN: New GitLab admin token (after manual rotation)
+# - CURRENT_ADMIN_TOKEN: Current GitLab admin token (for validation)
+#
+# Optional Variables:
+# - DRY_RUN: Set to "true" to test without making changes
+# - REVOKE_OLD_TOKEN: Set to "true" to auto-revoke old token
+# - GRACE_PERIOD_HOURS: Hours to keep old token valid (default: 48)
+
+stages:
+  - validate
+  - sync
+  - verify
+  - cleanup
+  - notify
+
+# Global variables
+variables:
+  PYTHON_VERSION: "3.11"
+  PLUGIN_URL: "http://localhost:5000"  # Adjust if plugin runs elsewhere
+  DRY_RUN: "false"
+  REVOKE_OLD_TOKEN: "false"
+  GRACE_PERIOD_HOURS: "48"
+
+# Only run on manual triggers or schedules
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - when: manual
+
+# ==================== VALIDATE STAGE ====================
+
+validate:environment:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "🔍 Validating environment configuration..."
+    
+    - |
+      # Check required variables
+      if [ -z "$VAULT_ADDR" ]; then
+        echo "❌ VAULT_ADDR not set"
+        exit 1
+      fi
+      
+      if [ -z "$VAULT_TOKEN" ]; then
+        echo "❌ VAULT_TOKEN not set"
+        exit 1
+      fi
+      
+      if [ -z "$NEW_ADMIN_TOKEN" ]; then
+        echo "❌ NEW_ADMIN_TOKEN not set"
+        echo "   Rotate token in GitLab UI first, then update this CI variable"
+        exit 1
+      fi
+    
+    - echo "✅ All required variables present"
+    - echo "   Vault: $VAULT_ADDR"
+    - echo "   Dry Run: $DRY_RUN"
+    - echo "   Revoke Old: $REVOKE_OLD_TOKEN"
+    
+    - |
+      # Install curl
+      apk add --no-cache curl
+      
+      # Test Vault connection
+      if curl -s -o /dev/null -w "%{http_code}" "$VAULT_ADDR/v1/sys/health" | grep -q "200\|429\|472\|473"; then
+        echo "✅ Vault is reachable"
+      else
+        echo "❌ Cannot connect to Vault at $VAULT_ADDR"
+        exit 1
+      fi
+
+validate:tokens:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "🔍 Validating tokens..."
+    
+    - apk add --no-cache curl jq
+    
+    - |
+      # Test new admin token with GitLab API
+      RESPONSE=$(curl -s -w "\n%{http_code}" -H "PRIVATE-TOKEN: $NEW_ADMIN_TOKEN" \
+        "https://gitlab.com/api/v4/user")
+      
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+      
+      if [ "$HTTP_CODE" = "200" ]; then
+        USERNAME=$(echo "$BODY" | jq -r '.username')
+        echo "✅ New admin token is valid (user: $USERNAME)"
+      else
+        echo "❌ New admin token is invalid or doesn't have api scope"
+        echo "   HTTP Code: $HTTP_CODE"
+        exit 1
+      fi
+    
+    - echo "✅ Token validation complete"
+
+# ==================== SYNC STAGE ====================
+
+sync:vault:
+  stage: sync
+  image: alpine:latest
+  dependencies:
+    - validate:environment
+    - validate:tokens
+  script:
+    - echo "🔄 Syncing new admin token to Vault..."
+    
+    - apk add --no-cache curl jq
+    
+    - |
+      if [ "$DRY_RUN" = "true" ]; then
+        echo "🔍 [DRY RUN] Would update Vault backend config with:"
+        echo "   gitlab_url: https://gitlab.com"
+        echo "   token: [NEW_ADMIN_TOKEN]"
+        echo "   default_ttl: 3600"
+        echo "   max_ttl: 86400"
+        exit 0
+      fi
+    
+    - |
+      # Update Vault backend config via HTTP API (for our simplified plugin)
+      # Adjust endpoint if using different plugin implementation
+      
+      RESPONSE=$(curl -s -w "\n%{http_code}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d "{\"gitlab_url\":\"https://gitlab.com\",\"token\":\"$NEW_ADMIN_TOKEN\",\"default_ttl\":3600,\"max_ttl\":86400}" \
+        "$PLUGIN_URL/config")
+      
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+      
+      if [ "$HTTP_CODE" = "200" ]; then
+        echo "✅ Vault backend config updated successfully"
+        echo "$BODY" | jq '.'
+      else
+        echo "❌ Failed to update Vault config"
+        echo "   HTTP Code: $HTTP_CODE"
+        echo "   Response: $BODY"
+        exit 1
+      fi
+    
+    - |
+      # Save rotation metadata
+      echo "rotation_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> rotation.env
+      echo "rotation_pipeline=$CI_PIPELINE_URL" >> rotation.env
+  
+  artifacts:
+    reports:
+      dotenv: rotation.env
+    expire_in: 30 days
+
+# ==================== VERIFY STAGE ====================
+
+verify:plugin:
+  stage: verify
+  image: alpine:latest
+  dependencies:
+    - sync:vault
+  script:
+    - echo "🔍 Verifying plugin functionality..."
+    
+    - apk add --no-cache curl jq
+    
+    - |
+      # Check plugin health
+      if curl -s "$PLUGIN_URL/health" | jq -e '.status == "healthy"' > /dev/null; then
+        echo "✅ Plugin is healthy"
+      else
+        echo "❌ Plugin health check failed"
+        exit 1
+      fi
+    
+    - |
+      # Check backend configuration
+      CONFIG=$(curl -s "$PLUGIN_URL/config")
+      
+      if echo "$CONFIG" | jq -e '.data.configured == true' > /dev/null; then
+        echo "✅ Backend is configured"
+        echo "$CONFIG" | jq '.data'
+      else
+        echo "❌ Backend not properly configured"
+        exit 1
+      fi
+    
+    - |
+      # Optional: Test token generation (if test role exists)
+      if curl -s "$PLUGIN_URL/roles/test-role" | jq -e '.data' > /dev/null 2>&1; then
+        echo "🧪 Testing dynamic token generation..."
+        
+        CREDS=$(curl -s "$PLUGIN_URL/creds/test-role")
+        
+        if echo "$CREDS" | jq -e '.data.token' > /dev/null; then
+          echo "✅ Plugin can generate tokens with new admin token"
+        else
+          echo "⚠️ Could not generate test token (role may not exist)"
+        fi
+      else
+        echo "ℹ️ No test role configured, skipping token generation test"
+      fi
+
+# ==================== CLEANUP STAGE ====================
+
+cleanup:old-token:
+  stage: cleanup
+  image: python:3.11-slim
+  dependencies:
+    - sync:vault
+  rules:
+    - if: '$REVOKE_OLD_TOKEN == "true"'
+      when: on_success
+    - when: manual  # Require manual approval
+  script:
+    - echo "🧹 Cleaning up old admin token..."
+    
+    - pip install python-gitlab
+    
+    - |
+      if [ "$DRY_RUN" = "true" ]; then
+        echo "🔍 [DRY RUN] Would revoke old admin token after grace period"
+        exit 0
+      fi
+    
+    - |
+      python3 << 'EOF'
+      import gitlab
+      import os
+      from datetime import datetime, timedelta
+      
+      gl = gitlab.Gitlab('https://gitlab.com', private_token=os.getenv('CURRENT_ADMIN_TOKEN'))
+      
+      try:
+          # Get all personal access tokens
+          user = gl.users.get('current')
+          tokens = user.personal_access_tokens.list(all=True)
+          
+          # Find tokens older than grace period
+          grace_hours = int(os.getenv('GRACE_PERIOD_HOURS', '48'))
+          cutoff = datetime.now() - timedelta(hours=grace_hours)
+          
+          for token in tokens:
+              # Check if this is an old admin token
+              if 'admin' in token.name.lower() or 'vault' in token.name.lower():
+                  created = datetime.fromisoformat(token.created_at.replace('Z', '+00:00').replace('+00:00', ''))
+                  
+                  if created < cutoff and token.active:
+                      print(f"🗑️ Revoking old token: {token.name} (created {token.created_at})")
+                      token.delete()
+                      print("✅ Old token revoked")
+                      break
+          else:
+              print("ℹ️ No old tokens found to revoke (may already be deleted)")
+      
+      except Exception as e:
+          print(f"⚠️ Could not revoke old token: {e}")
+          print("   You may need to manually delete it from GitLab UI")
+      EOF
+  
+  allow_failure: true
+
+# ==================== NOTIFY STAGE ====================
+
+notify:success:
+  stage: notify
+  image: alpine:latest
+  dependencies:
+    - sync:vault
+  rules:
+    - when: on_success
+  script:
+    - echo "✅ Admin token rotation completed successfully!"
+    - echo "📊 Pipeline: $CI_PIPELINE_URL"
+    - echo "⏰ Timestamp: $rotation_timestamp"
+    
+    # Optional: Send Slack notification
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        apk add --no-cache curl
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"✅ GitLab Admin Token Rotated & Synced to Vault\nPipeline: $CI_PIPELINE_URL\nTimestamp: $rotation_timestamp\"}" \
+          $SLACK_WEBHOOK_URL
+      fi
+
+notify:failure:
+  stage: notify
+  image: alpine:latest
+  rules:
+    - when: on_failure
+  script:
+    - echo "❌ Admin token rotation FAILED!"
+    - echo "📊 Pipeline: $CI_PIPELINE_URL"
+    - echo "🔍 Check logs for details"
+    
+    # Optional: Send alert
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        apk add --no-cache curl
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"❌ GitLab Admin Token Rotation FAILED\nPipeline: $CI_PIPELINE_URL\nAction: Check logs and retry manually\"}" \
+          $SLACK_WEBHOOK_URL
+      fi
