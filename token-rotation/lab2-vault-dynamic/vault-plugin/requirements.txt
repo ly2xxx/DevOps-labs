@@ -1,0 +1,14 @@
+# Python dependencies for GitLab Secrets Plugin
+
+# GitLab API client
+python-gitlab>=4.0.0
+
+# Web framework for HTTP backend
+flask>=3.0.0
+
+# HashiCorp Vault client (for testing)
+hvac>=2.0.0
+
+# Utilities
+requests>=2.31.0
+python-dateutil>=2.8.2
