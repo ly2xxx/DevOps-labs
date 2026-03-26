@@ -5,6 +5,7 @@
 This test case demonstrates how to integrate HashiCorp Vault with your OKD cluster to manage secrets externally. Instead of storing secrets directly in OpenShift, applications retrieve them from Vault at runtime.
 
 **Use Cases:**
+
 - ✅ Centralized secret management across multiple clusters
 - ✅ Dynamic secrets with automatic rotation
 - ✅ Audit trail for secret access
@@ -46,6 +47,8 @@ This test case demonstrates how to integrate HashiCorp Vault with your OKD clust
                     │         └───────────────────┘        │
                     │         Port: 8200                    │
                     └─────────────────────────────────────────┘
+
+vault-auth SA token  →  Kubernetes auth role (okd-demo)  →  ACL Policy (okd-demo)  →  Paths allowed
 ```
 
 ---
@@ -71,6 +74,7 @@ docker run -d `
 ```
 
 **Note:** Dev mode:
+
 - ✅ Automatically unsealed
 - ✅ In-memory storage (data lost on restart)
 - ✅ Root token = "root"
@@ -91,6 +95,7 @@ curl http://localhost:8200/v1/sys/health
 Open browser: http://localhost:8200
 
 **Login:**
+
 - Method: Token
 - Token: `root`
 
@@ -108,7 +113,7 @@ $env:VAULT_TOKEN="root"
 # Download vault CLI (if not already installed)
 # From: https://developer.hashicorp.com/vault/install
 # Or use Docker exec:
-docker exec -it vault-dev /bin/sh
+docker exec -it -e VAULT_TOKEN=root vault-dev /bin/sh
 ```
 
 ### Step 2.2: Enable KV Secrets Engine
@@ -165,14 +170,26 @@ vault auth enable kubernetes
 
 ```powershell
 # Log in as admin if not already
-oc login -u kubeadmin https://api.crc.testing:6443
+oc login --token=<kubeadmin-token> --server=https://api.crc.testing:6443
 
 # Create a service account for Vault
 oc create serviceaccount vault-auth -n default
 
-# Get the service account token (OKD 4.11+)
-$TOKEN_SECRET_NAME = oc get serviceaccount vault-auth -n default -o jsonpath='{.secrets[0].name}'
-$SA_JWT_TOKEN = oc get secret $TOKEN_SECRET_NAME -n default -o jsonpath='{.data.token}' | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+# Create a long-lived token secret bound to the service account
+# (Required on OKD 4.11+ / Kubernetes 1.24+ - token secrets are no longer auto-created)
+@"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-auth-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: vault-auth
+type: kubernetes.io/service-account-token
+"@ | oc apply -f -
+
+# Wait a moment for the token to be populated, then retrieve it
+$SA_JWT_TOKEN = oc get secret vault-auth-token -n default -o jsonpath='{.data.token}' | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
 
 # Get Kubernetes CA cert
 $K8S_CA_CERT = oc config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
@@ -185,38 +202,56 @@ Write-Host "K8S_HOST: $K8S_HOST"
 Write-Host "Token length: $($SA_JWT_TOKEN.Length)"
 ```
 
-**Back in Vault (Docker container):**
+**Back in PowerShell — run from Windows (variables already set above):**
 
-```bash
-# Configure Kubernetes auth (replace with actual values)
-vault write auth/kubernetes/config \
-  token_reviewer_jwt="<SA_JWT_TOKEN>" \
-  kubernetes_host="https://api.crc.testing:6443" \
-  kubernetes_ca_cert="<K8S_CA_CERT>"
+```powershell
+# Step 1: Enable Kubernetes auth method in Vault
+docker exec -e VAULT_TOKEN=root vault-dev vault auth enable kubernetes
+
+# Step 2: Write CA cert to a temp file inside the container
+# (needed because $K8S_CA_CERT is multi-line — can't pass directly as an argument)
+$K8S_CA_CERT | docker exec -i vault-dev sh -c 'cat > /tmp/k8s-ca.crt'
+
+# Step 3: Configure Kubernetes auth
+# PowerShell interpolates $SA_JWT_TOKEN and $K8S_HOST; CA cert is read from file with @
+docker exec -e VAULT_TOKEN=root vault-dev vault write auth/kubernetes/config `
+    token_reviewer_jwt="$SA_JWT_TOKEN" `
+    kubernetes_host="$K8S_HOST" `
+    kubernetes_ca_cert=@/tmp/k8s-ca.crt
+
+# Step 4: Verify
+docker exec -e VAULT_TOKEN=root vault-dev vault read auth/kubernetes/config
 ```
 
 ### Step 3.2: Create Vault Policy
 
-```bash
-# Create policy file
-cat > /tmp/okd-demo-policy.hcl <<EOF
+```powershell
+# Write policy HCL into the container using a PowerShell here-string
+$policy = @"
 path "secret/data/okd-demo/*" {
   capabilities = ["read"]
 }
-EOF
+"@
+$policy | docker exec -i vault-dev sh -c 'cat > /tmp/okd-demo-policy.hcl'
 
 # Write policy to Vault
-vault policy write okd-demo /tmp/okd-demo-policy.hcl
+docker exec -e VAULT_TOKEN=root vault-dev vault policy write okd-demo /tmp/okd-demo-policy.hcl
+
+# Verify
+docker exec -e VAULT_TOKEN=root vault-dev vault policy read okd-demo
 ```
 
 ### Step 3.3: Create Kubernetes Auth Role
 
-```bash
-vault write auth/kubernetes/role/okd-demo \
-  bound_service_account_names=app-service-account \
-  bound_service_account_namespaces=vault-demo \
-  policies=okd-demo \
-  ttl=24h
+```powershell
+docker exec -e VAULT_TOKEN=root vault-dev vault write auth/kubernetes/role/okd-demo `
+    bound_service_account_names=app-service-account `
+    bound_service_account_namespaces=vault-demo `
+    policies=okd-demo `
+    ttl=24h
+
+# Verify
+docker exec -e VAULT_TOKEN=root vault-dev vault read auth/kubernetes/role/okd-demo
 ```
 
 ---
@@ -258,6 +293,7 @@ metadata:
 ```
 
 Apply:
+
 ```powershell
 oc apply -f vault-demo-sa.yaml
 ```
@@ -330,6 +366,7 @@ spec:
 ```
 
 Apply:
+
 ```powershell
 oc apply -f vault-demo-app.yaml
 ```
@@ -414,12 +451,14 @@ spec:
 ```
 
 Apply:
+
 ```powershell
 oc apply -f vault-secretstore.yaml
 oc apply -f vault-externalsecret.yaml
 ```
 
 **Verify Secret Created:**
+
 ```powershell
 oc get secret database-credentials -n vault-demo -o yaml
 ```
@@ -450,6 +489,7 @@ oc exec -n vault-demo $POD_NAME -- cat /vault/secrets/api-keys
 ```
 
 **Expected Output:**
+
 ```bash
 export DB_USERNAME="db_user"
 export DB_PASSWORD="super_secret_password_123"
@@ -537,21 +577,22 @@ vault write auth/kubernetes/role/okd-demo-dev \
 ### Security Best Practices
 
 1. **Never use dev mode in production**
+
    - Use proper storage backend (Consul, etcd, etc.)
    - Enable auto-unsealing
    - Configure TLS/SSL
-
 2. **Principle of Least Privilege**
+
    - Create specific policies per application
    - Use short TTLs for tokens
    - Regularly rotate credentials
-
 3. **Network Security**
+
    - Run Vault in private network
    - Use firewall rules
    - Enable mutual TLS
-
 4. **Monitoring & Auditing**
+
    - Enable audit logging
    - Monitor secret access patterns
    - Set up alerts for suspicious activity
@@ -583,6 +624,7 @@ vault server -config=/vault/config/config-node3.hcl
 **Symptom:** Init container `vault-agent-init` fails
 
 **Solution:**
+
 ```powershell
 # Check network connectivity
 oc exec -n vault-demo <pod-name> -c vault-agent -- wget -O- http://host.docker.internal:8200/v1/sys/health
@@ -597,6 +639,7 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -like "*v
 **Symptom:** `permission denied` errors
 
 **Solution:**
+
 ```bash
 # Verify service account token
 oc get secret -n vault-demo
@@ -614,6 +657,7 @@ vault write auth/kubernetes/login \
 ### Issue: Secrets Not Updating
 
 **Solution:**
+
 ```powershell
 # Force pod restart
 oc rollout restart deployment/vault-demo-app -n vault-demo
@@ -641,17 +685,20 @@ docker network rm vault-net
 ## Additional Resources
 
 ### Official Documentation
+
 - [HashiCorp Vault](https://www.vaultproject.io/)
 - [Vault Kubernetes Integration](https://developer.hashicorp.com/vault/docs/platform/k8s)
 - [Vault Agent Injector](https://developer.hashicorp.com/vault/docs/platform/k8s/injector)
 - [External Secrets Operator](https://external-secrets.io/)
 
 ### Tutorials
+
 - [Vault on Kubernetes Deployment Guide](https://developer.hashicorp.com/vault/tutorials/kubernetes/kubernetes-raft-deployment-guide)
 - [Injecting Secrets into Kubernetes Pods](https://developer.hashicorp.com/vault/tutorials/kubernetes/kubernetes-sidecar)
 - [External Secrets with Vault](https://external-secrets.io/latest/provider/hashicorp-vault/)
 
 ### Community
+
 - [Vault GitHub](https://github.com/hashicorp/vault)
 - [Vault Discuss Forum](https://discuss.hashicorp.com/c/vault/30)
 
@@ -661,16 +708,15 @@ docker network rm vault-net
 
 This lab demonstrated:
 
-✅ Running HashiCorp Vault in Docker  
-✅ Configuring Kubernetes authentication  
-✅ Storing secrets in Vault  
-✅ Two methods to inject secrets into OKD pods:
-  - Vault Agent Sidecar (dynamic injection)
-  - External Secrets Operator (synced Kubernetes Secrets)  
-✅ Verifying secret access  
-✅ Understanding production considerations  
+✅ Running HashiCorp Vault in Docker✅ Configuring Kubernetes authentication✅ Storing secrets in Vault✅ Two methods to inject secrets into OKD pods:
+
+- Vault Agent Sidecar (dynamic injection)
+- External Secrets Operator (synced Kubernetes Secrets)
+  ✅ Verifying secret access
+  ✅ Understanding production considerations
 
 **Next Steps:**
+
 - Explore dynamic secrets for databases
 - Implement secret rotation workflows
 - Set up audit logging and monitoring
@@ -678,7 +724,7 @@ This lab demonstrated:
 
 ---
 
-**Created:** March 2026  
+**Created:** March 2026
 **Lab Environment:** OKD (CRC) on Windows + Docker Desktop
 
 ---
