@@ -1,19 +1,22 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Docker DX: Debug Dockerfile (Both)",
-            "type": "docker-build",
-            "request": "launch",
-            "dockerfile": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder/Dockerfile.with-both",
-            "context": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder"
-        },
-        {
-            "name": "Docker DX: Debug Dockerfile (Claude Only)",
-            "type": "docker-build",
-            "request": "launch",
-            "dockerfile": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder/Dockerfile.with-claude-code",
-            "context": "${workspaceFolder}/docker-dx-extension/ubi9-minimal-coder"
-        }
-    ]
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "dockerfile",
+      "request": "launch",
+      "name": "Debug: ubi9-minimal-coder (with-both)",
+      "dockerfile": "Dockerfile",
+      "contextPath": "${workspaceFolder}r",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        // Pin a specific Claude Code version or use "latest"
+        "--build-arg",
+        "NODE_ENV=development"
+      ],
+      "stopOnEntry": true,
+    }
+  ]
 }
