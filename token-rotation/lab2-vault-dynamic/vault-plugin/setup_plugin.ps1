@@ -1,4 +1,4 @@
-# HashiCorp Vault GitLab Secrets Plugin - Setup Script (Windows)
+﻿# HashiCorp Vault GitLab Secrets Plugin - Setup Script (Windows)
 # Automates plugin installation and registration with Vault
 #
 # Prerequisites:
