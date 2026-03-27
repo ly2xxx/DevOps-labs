@@ -1,0 +1,103 @@
+# Confluence + Vault Integration - Complete Testing Stack
+# Full environment for testing dynamic database credentials
+#
+# Services:
+# - PostgreSQL: Confluence database
+# - Vault: Secrets management
+# - Confluence: Wiki application with Vault integration
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose exec vault sh /vault/setup/setup-vault.sh
+#   docker-compose logs -f confluence
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: confluence-postgres
+    environment:
+      POSTGRES_DB: confluence
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-vault-admin.sql:/docker-entrypoint-initdb.d/01-vault-admin.sql
+    networks:
+      - confluence-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # HashiCorp Vault
+  vault:
+    image: hashicorp/vault:latest
+    container_name: confluence-vault
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://127.0.0.1:8200
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./vault:/vault/setup
+      - vault_data:/vault/file
+      - vault_logs:/vault/logs
+    networks:
+      - confluence-network
+    cap_add:
+      - IPC_LOCK
+    command: server -dev
+    healthcheck:
+      test: ["CMD-SHELL", "vault status || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Atlassian Confluence (with Vault integration)
+  confluence:
+    image: atlassian/confluence-server:7.19
+    container_name: confluence-app
+    environment:
+      # Vault configuration
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root  # In production, use AppRole!
+      
+      # Database configuration (will be overridden by Vault)
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/confluence
+      ATL_DB_TYPE: postgresql
+      
+      # JVM settings
+      JVM_MINIMUM_MEMORY: 2048m
+      JVM_MAXIMUM_MEMORY: 2048m
+    ports:
+      - "8090:8090"
+      - "8091:8091"
+    volumes:
+      - confluence_data:/var/atlassian/application-data/confluence
+      - ./confluence/start-confluence-vault.sh:/opt/atlassian/confluence/bin/start-confluence-vault.sh:ro
+    networks:
+      - confluence-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    # Override entrypoint to use Vault-enabled startup
+    entrypoint: ["/bin/bash", "/opt/atlassian/confluence/bin/start-confluence-vault.sh"]
+
+networks:
+  confluence-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  vault_data:
+  vault_logs:
+  confluence_data:
