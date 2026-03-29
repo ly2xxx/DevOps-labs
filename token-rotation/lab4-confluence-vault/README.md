@@ -118,6 +118,23 @@ lab4-confluence-vault/
 
 ## 🚀 Quick Start
 
+### Option 0: Standalone Confluence (Simplest — no Vault integration)
+
+Use this to get Confluence running immediately without any Vault setup:
+
+```bash
+docker run -v /data/your-confluence-home:/var/atlassian/application-data/confluence \
+  --name="confluence" \
+  -d -p 8090:8090 -p 8091:8091 \
+  atlassian/confluence-server:7.19
+```
+
+Then open **http://localhost:8090** and follow the setup wizard.
+
+> **Note:** This runs Confluence with a static (embedded H2) database and no Vault integration. Use this to explore the UI. For the full lab exercise with dynamic credentials, use Option 1 below.
+
+---
+
 ### Option 1: Full Docker Stack (Recommended for Testing)
 
 ```powershell
@@ -132,6 +149,22 @@ docker-compose exec vault sh /vault/setup/setup-vault.sh
 # Verify Confluence connected with dynamic credentials
 docker-compose logs confluence | Select-String "database"
 ```
+
+### Applying a Confluence License
+
+Confluence requires a license even for self-hosted lab installs.
+
+1. Go to **https://my.atlassian.com/license/evaluation**
+2. Sign in or create a free Atlassian account
+3. Select **Confluence (Server)** → choose a user tier (e.g. 25 users is fine for a lab)
+4. Enter the **Server ID** shown on the setup page (e.g. `BTYD-QEDC-8Z0A-Z42K`) — yours will be unique
+5. Copy the generated license key and paste it into the Confluence setup page
+6. Click **Next** to continue setup
+
+> **Evaluation license** is free for 30 days, no credit card required.  
+> **Community/academic license** is free permanently for non-commercial use — apply at https://www.atlassian.com/software/views/community-license-request
+
+---
 
 ### Option 2: Production Setup (Existing Infrastructure)
 
