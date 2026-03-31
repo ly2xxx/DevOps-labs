@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: configmap-demo
+  labels:
+    app: demo-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+      - name: demo-app
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== ConfigMap Demo App (Environment Variables) ==="
+          echo "Database URL: $DATABASE_URL"
+          echo "Feature Flag: $FEATURE_FLAG"
+          echo "Log Level: $LOG_LEVEL"
+          echo "API Endpoint: $API_ENDPOINT"
+          echo "Max Connections: $MAX_CONNECTIONS"
+          echo ""
+          echo "Sleeping forever... (use kubectl logs to see this output)"
+          while true; do sleep 3600; done
+        env:
+        # Method 1: Individual environment variables from ConfigMap
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: database_url
+        - name: FEATURE_FLAG
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: feature_flag
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: log_level
+        - name: API_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: api_endpoint
+        - name: MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: max_connections
+        
+        # You can also mix with regular env vars
+        - name: APP_NAME
+          value: "ConfigMap Demo"
+        - name: ENVIRONMENT
+          value: "development"
+      
+      restartPolicy: Always

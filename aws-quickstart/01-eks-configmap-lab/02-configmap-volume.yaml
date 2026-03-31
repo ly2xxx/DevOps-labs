@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-volume
+  namespace: configmap-demo
+  labels:
+    app: demo-app-volume
+data:
+  # These will be mounted as individual files in /etc/config/
+  
+  database_url: |
+    postgres://localhost:5432/myapp
+  
+  app-settings.json: |
+    {
+      "log_level": "info",
+      "max_connections": 100,
+      "timeout_seconds": 30,
+      "feature_flags": {
+        "new_ui": false,
+        "beta_features": true
+      }
+    }
+  
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name localhost;
+      
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+      }
+      
+      location /api {
+        proxy_pass http://backend:8080;
+      }
+    }
+  
+  log_level: "info"

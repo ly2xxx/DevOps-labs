@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: configmap-demo
+  labels:
+    name: configmap-demo
+    purpose: learning-lab

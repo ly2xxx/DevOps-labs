@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app-both
+  namespace: configmap-demo
+  labels:
+    app: demo-app-both
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app-both
+  template:
+    metadata:
+      labels:
+        app: demo-app-both
+    spec:
+      containers:
+      - name: demo-app
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== ConfigMap Demo App (Both Methods) ==="
+          echo ""
+          echo "--- Environment Variables (from app-config) ---"
+          echo "DATABASE_URL: $DATABASE_URL"
+          echo "FEATURE_FLAG: $FEATURE_FLAG"
+          echo "LOG_LEVEL: $LOG_LEVEL"
+          echo ""
+          echo "--- Volume Files (from app-config-volume) ---"
+          echo "Files:"
+          ls -la /etc/config
+          echo ""
+          echo "app-settings.json content:"
+          cat /etc/config/app-settings.json
+          echo ""
+          echo "--- Comparison ---"
+          echo "Env var LOG_LEVEL: $LOG_LEVEL (requires pod restart to update)"
+          echo "File log_level: $(cat /etc/config/log_level) (updates automatically ~60s)"
+          echo ""
+          echo "Sleeping forever..."
+          while true; do sleep 3600; done
+        
+        # Environment variables from ConfigMap
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: database_url
+        - name: FEATURE_FLAG
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: feature_flag
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: log_level
+        
+        # Volume mount from ConfigMap
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+          readOnly: true
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: app-config-volume
+      
+      restartPolicy: Always

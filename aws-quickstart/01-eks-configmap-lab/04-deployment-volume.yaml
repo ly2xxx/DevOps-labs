@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app-volume
+  namespace: configmap-demo
+  labels:
+    app: demo-app-volume
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app-volume
+  template:
+    metadata:
+      labels:
+        app: demo-app-volume
+    spec:
+      containers:
+      - name: demo-app
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== ConfigMap Demo App (Volume Mount) ==="
+          echo ""
+          echo "Files in /etc/config:"
+          ls -la /etc/config
+          echo ""
+          echo "--- database_url ---"
+          cat /etc/config/database_url
+          echo ""
+          echo "--- app-settings.json ---"
+          cat /etc/config/app-settings.json
+          echo ""
+          echo "--- log_level ---"
+          cat /etc/config/log_level
+          echo ""
+          echo "Monitoring /etc/config/log_level for changes..."
+          while true; do 
+            echo "[$(date)] Current log_level: $(cat /etc/config/log_level)"
+            sleep 30
+          done
+        
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+          readOnly: true
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: app-config-volume
+          # Optional: Set file permissions
+          defaultMode: 0644
+          # Optional: Select specific keys to mount
+          # items:
+          # - key: database_url
+          #   path: db_url.txt
+          # - key: app-settings.json
+          #   path: settings.json
+      
+      restartPolicy: Always
