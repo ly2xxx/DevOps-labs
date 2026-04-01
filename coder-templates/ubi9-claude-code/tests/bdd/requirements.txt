@@ -1,0 +1,2 @@
+behave>=1.2.6
+paramiko>=3.0.0
