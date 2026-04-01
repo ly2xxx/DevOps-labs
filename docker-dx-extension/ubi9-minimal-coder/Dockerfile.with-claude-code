@@ -8,11 +8,16 @@ LABEL maintainer="Super Platform Engineering"
 LABEL description="UBI9-minimal with Claude Code CLI pre-installed"
 LABEL version="1.0-claude-fixed"
 
-# Install Node.js (required for Claude Code)
+# Install Node.js and required Coder agent utilities
 # UBI9-minimal uses microdnf, so we need nodejs from AppStream
 RUN microdnf install -y \
     nodejs \
     npm \
+    tar \
+    unzip \
+    git \
+    wget \
+    findutils \
     && microdnf clean all \
     && rm -rf /var/cache/yum
 
@@ -24,7 +29,7 @@ USER coder
 WORKDIR /home/coder
 
 # Environment variables
-#  Tells npm to install global packages into a folder the coder user actually owns (/home/coder/.npm-global), rather than the system-level /usr/local/lib (which would cause a "Permission Denied" error)
+#  Tells npm to install global packages into a folder the coder user actually owns
 ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
     PATH="/home/coder/.npm-global/bin:${PATH}" \
     NODE_ENV=production
@@ -33,6 +38,10 @@ ENV NPM_CONFIG_PREFIX="/home/coder/.npm-global" \
 ARG CLAUDE_CODE_VERSION=latest
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
+# Bake PATH into shell init files so Coder agent startup scripts can find claude-code
+# (Docker ENV is not inherited by shells spawned by the Coder agent init_script)
+RUN echo 'export PATH="/home/coder/.npm-global/bin:$PATH"' >> /home/coder/.bashrc && \
+    echo 'export NPM_CONFIG_PREFIX="/home/coder/.npm-global"' >> /home/coder/.bashrc
 
 # Create workspace directory
 RUN mkdir -p /home/coder/workspace

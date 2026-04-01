@@ -98,10 +98,15 @@ resource "coder_agent" "main" {
   startup_script         = <<-EOT
     set -e
 
+    # Load user environment (critical: Docker ENV is not inherited by agent shells)
+    # shellcheck disable=SC1090
+    [ -f ~/.bashrc ] && source ~/.bashrc
+    export PATH="/home/coder/.npm-global/bin:$PATH"
+
     # Install dotfiles if provided
     if [ -n "${data.coder_parameter.dotfiles_uri.value}" ]; then
       echo "📦 Installing dotfiles from ${data.coder_parameter.dotfiles_uri.value}..."
-      if command -v git >/dev/null 2>&1; then
+      if command -v git > /dev/null 2>&1; then
         git clone "${data.coder_parameter.dotfiles_uri.value}" ~/dotfiles
         if [ -f ~/dotfiles/install.sh ]; then
           bash ~/dotfiles/install.sh
@@ -113,8 +118,10 @@ resource "coder_agent" "main" {
 
     # Verify Claude Code installation
     echo "🤖 Verifying Claude Code installation..."
-    if command -v claude-code >/dev/null 2>&1; then
+    if command -v claude-code > /dev/null 2>&1; then
       echo "✅ Claude Code version: $(claude-code --version)"
+    elif [ -f /home/coder/.npm-global/bin/claude-code ]; then
+      echo "✅ Claude Code found at: /home/coder/.npm-global/bin/claude-code"
     else
       echo "❌ Claude Code not found!"
       exit 1

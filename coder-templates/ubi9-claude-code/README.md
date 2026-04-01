@@ -445,3 +445,4 @@ coder templates delete ubi9-claude-code
 ---
 
 **Happy coding with Claude in Coder!** 🤖🚀
+![alt text](image.png)
