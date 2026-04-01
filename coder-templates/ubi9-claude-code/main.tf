@@ -70,6 +70,7 @@ data "coder_parameter" "dotfiles_uri" {
 
 # Workspace metadata
 data "coder_workspace" "me" {}
+data "coder_workspace_owner" "me" {}
 
 # Docker provider
 provider "docker" {}
@@ -94,7 +95,6 @@ resource "docker_volume" "home_volume" {
 resource "coder_agent" "main" {
   os                     = "linux"
   arch                   = data.coder_provisioner.me.arch
-  startup_script_timeout = 180
   startup_script         = <<-EOT
     set -e
 
@@ -239,7 +239,7 @@ EOF
 resource "docker_container" "workspace" {
   count = data.coder_workspace.me.start_count
   image = var.image
-  name  = "coder-${data.coder_workspace.me.owner}-${data.coder_workspace.me.name}"
+  name  = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}"
 
   # Coder agent token
   env = [
@@ -270,7 +270,7 @@ resource "docker_container" "workspace" {
   # Labels
   labels {
     label = "coder.owner"
-    value = data.coder_workspace.me.owner
+    value = data.coder_workspace_owner.me.name
   }
   labels {
     label = "coder.workspace_id"
