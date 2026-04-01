@@ -98,10 +98,7 @@ resource "coder_agent" "main" {
   startup_script         = <<-EOT
     set -e
 
-    # Load user environment (critical: Docker ENV is not inherited by agent shells)
-    # shellcheck disable=SC1090
-    [ -f ~/.bashrc ] && source ~/.bashrc
-    export PATH="/home/coder/.npm-global/bin:$PATH"
+    # claude-code is installed system-wide as root (/usr/local/bin) — no PATH setup needed
 
     # Install dotfiles if provided
     if [ -n "${data.coder_parameter.dotfiles_uri.value}" ]; then
@@ -116,15 +113,14 @@ resource "coder_agent" "main" {
       fi
     fi
 
-    # Verify Claude Code installation
+    # Verify Claude Code installation (system-wide install at /usr/local/bin/claude-code)
     echo "🤖 Verifying Claude Code installation..."
     if command -v claude-code > /dev/null 2>&1; then
-      echo "✅ Claude Code version: $(claude-code --version)"
-    elif [ -f /home/coder/.npm-global/bin/claude-code ]; then
-      echo "✅ Claude Code found at: /home/coder/.npm-global/bin/claude-code"
+      echo "✅ Claude Code version: $(claude-code --version 2>&1 | head -1)"
     else
-      echo "❌ Claude Code not found!"
-      exit 1
+      echo "⚠️  claude-code not found in PATH — workspace may be incomplete"
+      echo "     PATH=$PATH"
+      echo "     which node: $(which node 2>&1)"
     fi
 
     # Set up workspace

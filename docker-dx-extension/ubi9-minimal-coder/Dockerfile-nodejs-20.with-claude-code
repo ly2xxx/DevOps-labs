@@ -1,0 +1,51 @@
+# UBI9 Coder Template with Claude Code Pre-installed
+# Base: Red Hat's official UBI9 + Node.js 20 LTS image
+# Node.js 20 is required — claude-code@2.x requires Node >= 18
+# Previous ubi-minimal default was Node 16 which caused runtime failures
+
+FROM registry.access.redhat.com/ubi9/nodejs-20:latest
+
+LABEL maintainer="Super Platform Engineering"
+LABEL description="UBI9 nodejs-20 with Claude Code CLI pre-installed"
+LABEL version="2.0-node20"
+
+# All package and npm operations run as root
+# ubi9/nodejs-20 has a pre-existing root-owned cache at /opt/app-root/src/.npm;
+# running npm install as a non-root user before clearing that cache causes EACCES.
+USER root
+
+# Install Coder agent runtime dependencies
+# Note: nodejs & npm are already provided by the ubi9/nodejs-20 base image
+# Note: ubi9/nodejs-20 is full UBI9 (not minimal) — uses dnf, not microdnf
+RUN dnf install -y \
+    tar \
+    unzip \
+    git \
+    wget \
+    findutils \
+    shadow-utils \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+# Install Claude Code globally as root into the system npm prefix (/usr/local/bin).
+# This avoids the /opt/app-root/src/.npm permission issue entirely, and makes
+# claude-code available on PATH for every user without custom prefix config.
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+    && npm cache clean --force
+
+# Create non-root coder user (uid 1000)
+RUN useradd -m -u 1000 -s /bin/bash coder
+
+# Switch to coder user for runtime
+USER coder
+WORKDIR /home/coder
+
+# Create workspace directory
+RUN mkdir -p /home/coder/workspace
+
+# No HEALTHCHECK — the Coder agent manages its own liveness;
+# a failing HEALTHCHECK on claude-code would mark the container
+# perpetually unhealthy and block agent connectivity.
+
+CMD ["/bin/bash"]

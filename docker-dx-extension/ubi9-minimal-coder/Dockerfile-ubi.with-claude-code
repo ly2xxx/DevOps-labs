@@ -1,0 +1,46 @@
+# UBI9 Full Coder Template with Claude Code Pre-installed
+# Using full UBI9 (not minimal, not nodejs-20 variant) for maximum compatibility.
+# Node.js 20 installed via dnf module stream — claude-code requires Node >= 18.
+
+FROM registry.access.redhat.com/ubi9/ubi:latest
+
+LABEL maintainer="Super Platform Engineering"
+LABEL description="Full UBI9 with Node.js 20 and Claude Code CLI"
+LABEL version="3.0-ubi9-full"
+
+# Install Node.js 20 via dnf module stream + Coder agent dependencies
+# Full UBI9 uses dnf; no quirky /opt/app-root pre-existing users like nodejs-20 variant
+# Note: curl-minimal is pre-installed in ALL UBI9 variants — do NOT install curl (conflicts)
+RUN dnf module enable nodejs:20 -y && \
+    dnf install -y \
+    nodejs \
+    npm \
+    tar \
+    unzip \
+    git \
+    wget \
+    findutils \
+    shadow-utils \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+# Install Claude Code globally as root into system npm prefix (/usr/local/bin).
+# Available on PATH for every user — no custom prefix or .bashrc hacks needed.
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+    && npm cache clean --force
+
+# Create non-root coder user (uid 1000)
+RUN useradd -m -u 1000 -s /bin/bash coder
+
+# Switch to coder user for runtime
+USER coder
+WORKDIR /home/coder
+
+# Create workspace directory
+RUN mkdir -p /home/coder/workspace
+
+# No HEALTHCHECK — Coder agent manages its own liveness.
+# A failing HEALTHCHECK marks the container unhealthy and blocks agent connectivity.
+
+CMD ["/bin/bash"]
