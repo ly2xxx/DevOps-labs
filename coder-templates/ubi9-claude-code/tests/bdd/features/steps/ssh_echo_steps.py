@@ -11,6 +11,8 @@ Requirements:
 import subprocess
 from behave import given, when, then
 
+SSH_TIMEOUT = 60  # seconds — all coder ssh calls will fail after this
+
 
 # ---------------------------------------------------------------------------
 # Context setup
@@ -41,15 +43,23 @@ def step_run_command(context, command):
 
     `coder ssh <workspace> -- <command>` executes a single command and exits.
     The output is captured and stored on context for the Then steps to assert.
+    Times out after SSH_TIMEOUT seconds — a clear signal of an agent/SSH issue.
     """
-    result = subprocess.run(
-        ["coder", "ssh", context.workspace, "--", command],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    context.last_output = result.stdout.strip()
-    context.last_exit_code = result.returncode
+    try:
+        result = subprocess.run(
+            ["coder", "ssh", context.workspace, "--", command],
+            capture_output=True,
+            text=True,
+            timeout=SSH_TIMEOUT,
+        )
+        context.last_output = result.stdout.strip()
+        context.last_exit_code = result.returncode
+    except subprocess.TimeoutExpired:
+        raise AssertionError(
+            f"SSH command timed out after {SSH_TIMEOUT}s: '{command}'\n"
+            f"Workspace: {context.workspace}\n"
+            "This is likely an SSH/agent connectivity issue."
+        )
 
 
 # ---------------------------------------------------------------------------
