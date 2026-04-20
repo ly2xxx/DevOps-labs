@@ -6,6 +6,7 @@ Learn the basics of creating and managing Coder Tasks.
 ## Prerequisites
 - Coder CLI installed and configured
 - Access to a Coder instance
+https://coder.com/blog/launch-week-2025-introducing-coder-tasks
 
 ## Steps
 
