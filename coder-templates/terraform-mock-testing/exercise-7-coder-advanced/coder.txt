@@ -30,3 +30,89 @@ coder_workspace_owner ─┘
 
 coder_agent.main.id ──► coder_app.code_server (agent_id)
                    └──► coder_app.terminal    (agent_id)
+
+main.tftest.hcl... in progress
+  run "test_mocked_workspace"... pass
+
+# data.coder_workspace.me:
+data "coder_workspace" "me" {
+    access_port       = 0
+    access_url        = "fyl45x6t"
+    id                = "workspace-mock-12345"
+    is_prebuild       = false
+    is_prebuild_claim = false
+    name              = "demo-workspace"
+    prebuild_count    = 0
+    start_count       = 1
+    template_id       = "ktibmtbz"
+    template_name     = "ea5vyij0"
+    template_version  = "nfsgiofa"
+    transition        = "start"
+}
+
+# data.coder_workspace_owner.me:
+data "coder_workspace_owner" "me" {
+    email             = "mock@example.com"
+    full_name         = "x9t64e69"
+    groups            = []
+    id                = "user-mock-67890"
+    login_type        = "ids1ayju"
+    name              = "Mock User"
+    oidc_access_token = (sensitive value)
+    rbac_roles        = []
+    session_token     = (sensitive value)
+    ssh_private_key   = (sensitive value)
+    ssh_public_key    = "fxfn8xny"
+}
+
+# coder_agent.main:
+resource "coder_agent" "main" {
+    arch           = "amd64"
+    id             = "agent-mock-11111"
+    init_script    = "sf3yspg5"
+    os             = "linux"
+    startup_script = <<-EOT
+        #!/bin/bash
+        echo "Starting workspace 'demo-workspace'..."
+        echo "Owner: Mock User (mock@example.com)"
+        echo "Template: demo-template"
+    EOT
+    token          = (sensitive value)
+}
+
+# coder_app.code_server:
+resource "coder_app" "code_server" {
+    agent_id     = "agent-mock-11111"
+    display_name = "VS Code"
+    icon         = "/icon/vscode.svg"
+    id           = "app-mock-22222"
+    slug         = "code-server"
+    url          = "http://localhost:8080"
+
+    healthcheck {
+        interval  = 5
+        threshold = 3
+        url       = "http://localhost:8080/health"
+    }
+}
+
+# coder_app.terminal:
+resource "coder_app" "terminal" {
+    agent_id     = "agent-mock-11111"
+    display_name = "Terminal"
+    icon         = "/icon/terminal.svg"
+    id           = "app-mock-22222"
+    slug         = "terminal"
+    url          = "ws://localhost:8080/terminal"
+}
+
+
+Outputs:
+
+agent_id = "agent-mock-11111"
+code_server_url = "http://localhost:8080"
+terminal_slug = "terminal"
+workspace_id = "workspace-mock-12345"
+workspace_name = "demo-workspace"
+workspace_owner_email = "mock@example.com"
+workspace_owner_name = "Mock User"
