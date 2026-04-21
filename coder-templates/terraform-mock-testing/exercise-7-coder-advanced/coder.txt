@@ -1,0 +1,32 @@
+┌─────────────────────────────────────────────────────────┐
+│                   CODER CONTROL PLANE                   │
+│                                                         │
+│  data.coder_workspace.me          data.coder_workspace_owner.me  │
+│  (workspace metadata)             (user/auth metadata)  │
+│        │                                  │             │
+│        └──────────────┬───────────────────┘             │
+│                       │ read-only context                │
+└───────────────────────┼─────────────────────────────────┘
+                        │ informs provisioning
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│                  COMPUTE RESOURCE (VM/Container)        │
+│                                                         │
+│   coder_agent.main                                      │
+│   ├── .init_script  → injected into container CMD       │
+│   ├── .token        → set as CODER_AGENT_TOKEN env var  │
+│   └── .id           ──────────────────────┐             │
+│                                           │ agent_id    │
+│                      coder_app.code_server◄─────────────┤
+│                      (url: localhost:8080)               │
+│                                           │ agent_id    │
+│                      coder_app.terminal   ◄─────────────┘
+│                      (command: ws://...)                │
+└─────────────────────────────────────────────────────────┘
+
+coder_workspace  ─┐
+                  ├─► informs startup_script content in coder_agent
+coder_workspace_owner ─┘
+
+coder_agent.main.id ──► coder_app.code_server (agent_id)
+                   └──► coder_app.terminal    (agent_id)
