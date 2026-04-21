@@ -31,6 +31,17 @@ This lab explores Terraform's provider mocking functionality (available in Terra
 - Handling repeated blocks and nested attributes
 - Testing complex multi-provider modules
 
+### Exercise 6: Coder Provider Mocking
+- Mocking hashicorp/coder provider
+- Testing templates, workspaces, and parameters
+- Understanding generated IDs and attributes
+
+### Exercise 7: Coder Provider Advanced
+- Mock namespace with custom mock data
+- Simulating user.me data
+- Testing workspace agents, apps, and volumes
+- Override resource blocks
+
 ## Getting Started
 Each exercise is in its own subdirectory. Navigate to any exercise directory and run:
 ```bash
