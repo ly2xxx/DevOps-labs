@@ -1,36 +1,32 @@
-# Exercise 7: Coder Provider with Mock Namespace and user.me
-# This demonstrates advanced mocking with custom mock data for Coder provider
+# Exercise 7: Advanced Coder Provider Mocking
+# Demonstrates: custom mock data, coder_workspace_owner data source,
+# coder_agent, coder_app, override_resource inside run blocks.
+#
+# coder/coder v2 schema recap:
+#   DATA SOURCES: coder_workspace, coder_workspace_owner, coder_parameter
+#   RESOURCES:    coder_agent, coder_app
+#   NOTE: coder_workspace and coder_volume are NOT resources in coder/coder.
+#         Persistent storage is managed by the underlying infrastructure
+#         provider (docker_volume, kubernetes_persistent_volume_claim, etc.)
 
 terraform {
   required_providers {
     coder = {
-      source = "hashicorp/coder"
+      source = "coder/coder"
     }
   }
-}
-
-# Simulate user data that would normally come from coder_provider
-locals {
-  # In real Coder, user.me provides current user information
-  # We'll use a variable to simulate this
-  current_user = var.user_email != "" ? {
-    id        = "user-${var.user_email}"
-    email     = var.user_email
-    name      = var.user_name
-    avatar_url = "https://avatars.example.com/${var.user_email}"
-  } : null
 }
 
 variable "user_email" {
   type        = string
   default     = ""
-  description = "Current user email (leave empty to use mock)"
+  description = "Override user email displayed in startup script (leave empty for mock)"
 }
 
 variable "user_name" {
   type        = string
   default     = ""
-  description = "Current user name"
+  description = "Override user name displayed in startup script (leave empty for mock)"
 }
 
 variable "template_name" {
@@ -38,36 +34,37 @@ variable "template_name" {
   default     = "demo-template"
 }
 
-# Coder workspace building block
-resource "coder_workspace" "example" {
-  name        = "demo-workspace"
-  template_id = "template-id-placeholder"
-  
-  # Use owner reference
-  owner_name = local.current_user != null ? local.current_user.name : "mocked-user"
-  owner_id   = local.current_user != null ? local.current_user.id : "user-mocked"
-}
+# ── Data sources ──────────────────────────────────────────────────────────────
 
-# Coder agent - the connection to the development environment
+# Workspace metadata
+data "coder_workspace" "me" {}
+
+# Owner information (split from coder_workspace in v2)
+data "coder_workspace_owner" "me" {}
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+
+# Workspace agent – the real managed resource
 resource "coder_agent" "main" {
-  arch           = "amd64"
-  os             = "linux"
+  arch = "amd64"
+  os   = "linux"
+
   startup_script = <<-EOF
-                  #!/bin/bash
-                  echo "Starting development environment..."
-                  EOF
+    #!/bin/bash
+    echo "Starting workspace '${data.coder_workspace.me.name}'..."
+    echo "Owner: ${data.coder_workspace_owner.me.name} (${data.coder_workspace_owner.me.email})"
+    echo "Template: ${var.template_name}"
+  EOF
 }
 
-# Coder app - a web application exposed in the workspace
-resource "coder_app" "code-server" {
-  name        = "code-server"
+# VS Code server app
+resource "coder_app" "code_server" {
+  agent_id     = coder_agent.main.id
+  slug         = "code-server"
   display_name = "VS Code"
-  icon        = "/icon/vscode.svg"
-  url         = "http://localhost:8080"
-  
-  agent_id    = coder_agent.main.id
-  
-  # Healthcheck configuration
+  icon         = "/icon/vscode.svg"
+  url          = "http://localhost:8080"
+
   healthcheck {
     url       = "http://localhost:8080/health"
     interval  = 5
@@ -75,33 +72,31 @@ resource "coder_app" "code-server" {
   }
 }
 
-# Coder app - terminal
+# Terminal app
 resource "coder_app" "terminal" {
-  name        = "terminal"
+  agent_id     = coder_agent.main.id
+  slug         = "terminal"
   display_name = "Terminal"
-  icon        = "/icon/terminal.svg"
-  url         = "ws://localhost:8080/terminal"
-  
-  agent_id    = coder_agent.main.id
+  icon         = "/icon/terminal.svg"
+  url          = "ws://localhost:8080/terminal"
 }
 
-# Coder volume for persistent storage
-resource "coder_volume" "home" {
-  name        = "home"
-  mount_path  = "/home/coder"
-  size        = "10Gi"
-}
+# ── Outputs ───────────────────────────────────────────────────────────────────
 
 output "workspace_id" {
-  value = coder_workspace.example.id
+  value = data.coder_workspace.me.id
 }
 
 output "workspace_name" {
-  value = coder_workspace.example.name
+  value = data.coder_workspace.me.name
 }
 
-output "workspace_owner" {
-  value = coder_workspace.example.owner_name
+output "workspace_owner_name" {
+  value = data.coder_workspace_owner.me.name
+}
+
+output "workspace_owner_email" {
+  value = data.coder_workspace_owner.me.email
 }
 
 output "agent_id" {
@@ -109,9 +104,9 @@ output "agent_id" {
 }
 
 output "code_server_url" {
-  value = coder_app.code-server.url
+  value = coder_app.code_server.url
 }
 
-output "volume_size" {
-  value = coder_volume.home.size
+output "terminal_slug" {
+  value = coder_app.terminal.slug
 }

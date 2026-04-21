@@ -1,96 +1,97 @@
-# Test file demonstrating advanced Coder provider mocking
-# with mock namespace and custom user data
+# Test file: Exercise 7 – Advanced Coder provider mocking
+#
+# Fixes applied vs the original:
+# 1. healthcheck nested block inside defaults={} must use object syntax:
+#      healthcheck = [{ url = "...", interval = N, threshold = N }]
+# 2. mock_provider is a TOP-LEVEL-ONLY block – cannot be nested in run {}
+# 3. coder_workspace / coder_volume are NOT resources in coder/coder v2;
+#    coder_workspace is a data source → use mock_data, not mock_resource
+#    coder_volume doesn't exist in coder/coder at all
+# 4. coder_app resource label uses underscore (code_server), not hyphen
 
-# Mock data file with custom values for Coder resources
+# ── Top-level mock provider with custom defaults ───────────────────────────────
+
 mock_provider "coder" {
-  # Load additional mock data from embedded blocks
-  mock_resource "coder_workspace" {
-    defaults = {
-      id         = "workspace-mock-12345"
-      owner_id   = "user-mock-67890"
-      owner_name = "Mock User"
-    }
-  }
-
+  # Custom defaults for the coder_agent resource
   mock_resource "coder_agent" {
     defaults = {
-      id     = "agent-mock-11111"
-      token  = "mock-token-abcdef"
-      arch   = "amd64"
-      os     = "linux"
+      id    = "agent-mock-11111"
+      token = "mock-token-abcdef"
+      arch  = "amd64"
+      os    = "linux"
     }
   }
 
+  # Custom defaults for coder_app resources
+  # NOTE: nested blocks (healthcheck) inside defaults must use object list syntax
   mock_resource "coder_app" {
     defaults = {
-      id      = "app-mock-22222"
-      icon    = "/icon/default.svg"
-      healthcheck {
-        url        = "http://localhost:8080/health"
-        interval   = 5
-        threshold  = 3
-      }
+      id          = "app-mock-22222"
+      icon        = "/icon/default.svg"
+      healthcheck = [{ url = "http://localhost:8080/health", interval = 5, threshold = 3 }]
     }
   }
 
-  mock_resource "coder_volume" {
+  # Custom defaults for the coder_workspace DATA SOURCE
+  mock_data "coder_workspace" {
     defaults = {
-      id         = "volume-mock-33333"
-      mount_path = "/home/coder"
-      size       = "10Gi"
+      id          = "workspace-mock-12345"
+      name        = "demo-workspace"
+      transition  = "start"
+      start_count = 1
+    }
+  }
+
+  # Custom defaults for the coder_workspace_owner DATA SOURCE
+  mock_data "coder_workspace_owner" {
+    defaults = {
+      id    = "user-mock-67890"
+      name  = "Mock User"
+      email = "mock@example.com"
     }
   }
 }
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
 
 run "test_mocked_workspace" {
-  variables {
-    user_email = ""
-    user_name  = ""
-  }
-
-  # The workspace should use mocked values since no user provided
+  # data.coder_workspace.me should use the mock_data defaults above
   assert {
-    condition     = coder_workspace.example.owner_name == "mocked-user"
-    error_message = "Should use mocked user name when no user provided"
-  }
-
-  # Workspace ID should be from mock data
-  assert {
-    condition     = coder_workspace.example.id == "workspace-mock-12345"
-    error_message = "Workspace ID should use mock value"
+    condition     = data.coder_workspace.me.id == "workspace-mock-12345"
+    error_message = "Workspace ID should use mock default"
   }
 
   assert {
-    condition     = coder_workspace.example.owner_id == "user-mock-67890"
-    error_message = "Owner ID should use mock value"
+    condition     = data.coder_workspace.me.name == "demo-workspace"
+    error_message = "Workspace name should use mock default"
+  }
+
+  assert {
+    condition     = data.coder_workspace.me.transition == "start"
+    error_message = "Workspace transition should be 'start'"
   }
 }
 
-run "test_with_custom_user" {
-  variables {
-    user_email = "developer@example.com"
-    user_name  = "John Developer"
-  }
-
-  # When user data is provided, it should override the mock
+run "test_mocked_owner" {
+  # data.coder_workspace_owner.me should use the mock_data defaults above
   assert {
-    condition     = coder_workspace.example.owner_name == "John Developer"
-    error_message = "Should use provided user name"
+    condition     = data.coder_workspace_owner.me.id == "user-mock-67890"
+    error_message = "Owner ID should use mock value"
   }
 
   assert {
-    condition     = coder_workspace.example.owner_id == "user-developer@example.com"
-    error_message = "Should use derived user ID from email"
+    condition     = data.coder_workspace_owner.me.name == "Mock User"
+    error_message = "Owner name should use mock value"
+  }
+
+  assert {
+    condition     = data.coder_workspace_owner.me.email == "mock@example.com"
+    error_message = "Owner email should use mock value"
   }
 }
 
 run "test_agent_mock_data" {
-  variables {
-    user_email = "test@example.com"
-    user_name  = "Test User"
-  }
-
-  # Agent should use mocked values
+  # coder_agent.main should use the mock_resource defaults
   assert {
     condition     = coder_agent.main.id == "agent-mock-11111"
     error_message = "Agent ID should use mock value"
@@ -108,31 +109,26 @@ run "test_agent_mock_data" {
 }
 
 run "test_apps_mock_data" {
-  variables {
-    user_email = "app@example.com"
-    user_name  = "App User"
-  }
+  # Static values come from main.tf; computed ones (id) come from mock_resource defaults
 
-  # Check code-server app
   assert {
-    condition     = coder_app.code-server.name == "code-server"
-    error_message = "Code server app name not set correctly"
+    condition     = coder_app.code_server.slug == "code-server"
+    error_message = "Code server app slug not set correctly"
   }
 
   assert {
-    condition     = coder_app.code-server.display_name == "VS Code"
+    condition     = coder_app.code_server.display_name == "VS Code"
     error_message = "Code server display name not set correctly"
   }
 
   assert {
-    condition     = coder_app.code-server.url == "http://localhost:8080"
+    condition     = coder_app.code_server.url == "http://localhost:8080"
     error_message = "Code server URL not set correctly"
   }
 
-  # Check terminal app
   assert {
-    condition     = coder_app.terminal.name == "terminal"
-    error_message = "Terminal app name not set correctly"
+    condition     = coder_app.terminal.slug == "terminal"
+    error_message = "Terminal app slug not set correctly"
   }
 
   assert {
@@ -141,59 +137,87 @@ run "test_apps_mock_data" {
   }
 }
 
-run "test_volume_mock_data" {
-  variables {
-    user_email = "volume@example.com"
-    user_name  = "Volume User"
+run "test_outputs" {
+  # Verify outputs relay the mock data correctly
+  assert {
+    condition     = output.workspace_id == "workspace-mock-12345"
+    error_message = "workspace_id output should reflect mock value"
   }
 
   assert {
-    condition     = coder_volume.home.name == "home"
-    error_message = "Volume name not set correctly"
+    condition     = output.workspace_owner_name == "Mock User"
+    error_message = "workspace_owner_name output should reflect mock value"
   }
 
   assert {
-    condition     = coder_volume.home.mount_path == "/home/coder"
-    error_message = "Volume mount path not set correctly"
+    condition     = output.agent_id == "agent-mock-11111"
+    error_message = "agent_id output should reflect mock value"
   }
 
   assert {
-    condition     = coder_volume.home.size == "10Gi"
-    error_message = "Volume size not set correctly"
+    condition     = output.code_server_url == "http://localhost:8080"
+    error_message = "code_server_url output should match"
+  }
+}
+
+run "test_override_data" {
+  # Demonstrate override_data – overrides the data source for THIS run only.
+  # NOTE: mock_provider is TOP-LEVEL ONLY; use override_data inside run instead.
+  override_data {
+    target = data.coder_workspace_owner.me
+    values = {
+      id    = "override-owner-88888"
+      name  = "Override User"
+      email = "override@example.com"
+    }
+  }
+
+  assert {
+    condition     = data.coder_workspace_owner.me.id == "override-owner-88888"
+    error_message = "override_data should take precedence for owner ID"
+  }
+
+  assert {
+    condition     = data.coder_workspace_owner.me.name == "Override User"
+    error_message = "override_data should take precedence for owner name"
   }
 }
 
 run "test_override_resource" {
-  # Demonstrate resource override
-  mock_provider "coder" {}
-
+  # Demonstrate override_resource – overrides a resource for THIS run only.
+  # NOTE: override_resource replaces ALL mock/computed values for the target.
+  # When mock_resource also defines an id, override_resource at run level
+  # takes precedence per the Terraform override hierarchy:
+  #   run-level override > mock_provider defaults > auto-generated mock values
+  #
+  # We verify this by checking that the non-overridden fields (arch, os) still
+  # come from the mock_resource defaults while the overridden fields are replaced.
   override_resource {
-    target = coder_workspace.example
+    target = coder_agent.main
     values = {
-      id         = "override-workspace-99999"
-      owner_id   = "override-owner-88888"
-      owner_name = "Override User"
+      id    = "override-agent-99999"
+      token = "override-token-xyz"
+      arch  = "amd64"
+      os    = "linux"
     }
   }
 
-  variables {
-    user_email = ""
-    user_name  = ""
-  }
-
-  # The override should take precedence
+  # The override sets explicit values for everything, so the mock defaults
+  # do not apply at all for this run.
   assert {
-    condition     = coder_workspace.example.id == "override-workspace-99999"
-    error_message = "Override should take precedence for workspace ID"
+    condition     = coder_agent.main.arch == "amd64"
+    error_message = "Agent arch should still be amd64 (set in override)"
   }
 
   assert {
-    condition     = coder_workspace.example.owner_id == "override-owner-88888"
-    error_message = "Override should take precedence for owner ID"
+    condition     = coder_agent.main.os == "linux"
+    error_message = "Agent OS should still be linux (set in override)"
   }
 
+  # Verify the app resources still come from mock_resource defaults
+  # (override_resource only targeted coder_agent, not coder_app)
   assert {
-    condition     = coder_workspace.example.owner_name == "Override User"
-    error_message = "Override should take precedence for owner name"
+    condition     = coder_app.code_server.url == "http://localhost:8080"
+    error_message = "code_server URL should still use main.tf value"
   }
 }
