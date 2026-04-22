@@ -1,7 +1,7 @@
 # main.tftest.hcl
 
 mock_provider "aws" {
-  source = "./"
+  source = "./tests"
 }
 
 run "test" {
