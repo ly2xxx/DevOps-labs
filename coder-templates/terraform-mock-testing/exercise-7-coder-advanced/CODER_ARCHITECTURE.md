@@ -180,3 +180,15 @@ kubectl logs <pod-name> -n coder --previous
 
 On Kubernetes the Terraform template uses `kubernetes_pod` instead of `docker_container`, but the `coder_agent` init_script, token, and `CODER_AGENT_URL` are **identical** — only the infrastructure resource type changes.
 
+### Other useful commands
+```sh
+docker exec -it coder-ly2xxx-workspace-from-build-template00 sh
+
+docker exec -it coder-ly2xxx-workspace-from-build-template00 sh -c "cat /proc/1/cmdline | tr '\0' '\n'"
+```
+
+# Inside the container — find and start code-server:
+/tmp/code-server/bin/code-server --bind-addr 0.0.0.0:8080 &
+
+# Then test the healthcheck:
+curl -v http://localhost:8080/health
