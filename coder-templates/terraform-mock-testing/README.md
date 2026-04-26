@@ -58,3 +58,46 @@ terraform test
 
 ## Documentation
 Reference: [Terraform Provider Mocking](https://developer.hashicorp.com/terraform/language/tests/mocking)
+
+Here are the best Terraform testing tutorials I found:
+
+## 📚 Top Picks
+
+### 1. **Official HashiCorp Tutorial** (Best for built-in testing)
+**Write Terraform Tests**
+🔗 https://developer.hashicorp.com/terraform/tutorials/configuration-language/test
+- Covers Terraform's built-in `terraform test` command
+- Shows run blocks, plan/apply validation
+- Direct from HashiCorp - authoritative
+
+### 2. **Terratest by Gruntwork** (Industry standard for advanced testing)
+**Quick Start**
+🔗 https://terratest.gruntwork.io/docs/getting-started/quick-start/
+- Go-based infrastructure testing
+- Examples for AWS, GCP, Azure
+- More powerful than built-in tests
+
+### 3. **Comprehensive Comparison**
+**Terratest vs Terraform/OpenTofu Test**
+🔗 https://www.env0.com/blog/terratest-vs-terraform-opentofu-test-in-depth-comparison
+- Side-by-side comparison
+- When to use each approach
+
+### 4. **Spacelift Guide** (Strategy overview)
+**How to Test Terraform Code**
+🔗 https://spacelift.io/blog/terraform-test
+- Covers: terraform test, Terratest, TFLint, Checkov
+- Unit, integration, compliance, drift testing
+
+### 5. **Microsoft Learn** (Azure-focused practical guide)
+**End-to-end Terratest testing**
+🔗 https://learn.microsoft.com/en-us/azure/developer/terraform/best-practices-end-to-end-testing
+
+---
+
+## 🎯 Recommendation
+
+- **Start with:** HashiCorp's official tutorial (#1) - uses native `terraform test`
+- **For CI/CD & production:** Terratest (#2) - more powerful but requires Go
+
+Which approach are you looking for?
