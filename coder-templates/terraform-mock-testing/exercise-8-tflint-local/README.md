@@ -18,7 +18,11 @@ Install TFLint:
 brew install tflint
 
 # Windows (winget)
-winget install AdamTaviner.TFLint
+winget search tflint
+winget install TerraformLinters.tflint
+or
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/terraform-linters/tflint/master/install_windows.ps1 -OutFile install_tflint.ps1
+.\install_tflint.ps1
 
 # Linux
 curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install/install.sh | bash
@@ -32,6 +36,7 @@ This directory contains a Terraform configuration with **intentional issues**. Y
 
 ### Step 1: Run TFLint
 ```bash
+tflint --init
 tflint
 ```
 
