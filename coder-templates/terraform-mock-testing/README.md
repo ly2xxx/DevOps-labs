@@ -59,9 +59,13 @@ terraform test
 ## Documentation
 Reference: [Terraform Provider Mocking](https://developer.hashicorp.com/terraform/language/tests/mocking)
 
-Here are the best Terraform testing tutorials I found:
+Main page - Tests Overview:
+🔗 https://developer.hashicorp.com/terraform/language/tests
 
-## 📚 Top Picks
+Command Reference:
+🔗 https://developer.hashicorp.com/terraform/cli/commands/test
+
+## 📚 Top Picks Tutorials
 
 ### 1. **Official HashiCorp Tutorial** (Best for built-in testing)
 **Write Terraform Tests**
@@ -99,5 +103,3 @@ Here are the best Terraform testing tutorials I found:
 
 - **Start with:** HashiCorp's official tutorial (#1) - uses native `terraform test`
 - **For CI/CD & production:** Terratest (#2) - more powerful but requires Go
-
-Which approach are you looking for?
