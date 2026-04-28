@@ -42,6 +42,12 @@ This lab explores Terraform's provider mocking functionality (available in Terra
 - Testing workspace agents, apps, and volumes
 - Override resource blocks
 
+### Exercise 8: Running TFLint Locally
+- Installing TFLint
+- Running TFLint in your project
+- Fixing common issues
+- Understanding TFLint rules and configuration
+
 ## Getting Started
 Each exercise is in its own subdirectory. Navigate to any exercise directory and run:
 ```bash
