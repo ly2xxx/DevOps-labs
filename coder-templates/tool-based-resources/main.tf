@@ -111,9 +111,9 @@ data "coder_workspace_preset" "intellij" {
   name = "IntelliJ (4 CPU / 6 GB / 10 GB)"
   parameters = {
     (data.coder_parameter.tool.name)   = "intellij"
-    (data.coder_parameter.cpu.name)    = "4"
-    (data.coder_parameter.memory.name) = "6"
-    (data.coder_parameter.disk.name)   = "10"
+    #(data.coder_parameter.cpu.name)    = "4"
+    #(data.coder_parameter.memory.name) = "6"
+    #(data.coder_parameter.disk.name)   = "10"
   }
 }
 
@@ -121,9 +121,9 @@ data "coder_workspace_preset" "vscode" {
   name = "VS Code (2 CPU / 4 GB / 5 GB)"
   parameters = {
     (data.coder_parameter.tool.name)   = "vscode"
-    (data.coder_parameter.cpu.name)    = "2"
-    (data.coder_parameter.memory.name) = "4"
-    (data.coder_parameter.disk.name)   = "5"
+    #(data.coder_parameter.cpu.name)    = "2"
+    #(data.coder_parameter.memory.name) = "4"
+    #(data.coder_parameter.disk.name)   = "5"
   }
 }
 
@@ -131,9 +131,9 @@ data "coder_workspace_preset" "minimal" {
   name = "Minimal (2 CPU / 2 GB / 2 GB)"
   parameters = {
     (data.coder_parameter.tool.name)   = "none"
-    (data.coder_parameter.cpu.name)    = "2"
-    (data.coder_parameter.memory.name) = "2"
-    (data.coder_parameter.disk.name)   = "2"
+    #(data.coder_parameter.cpu.name)    = "2"
+    #(data.coder_parameter.memory.name) = "2"
+    #(data.coder_parameter.disk.name)   = "2"
   }
 }
 
