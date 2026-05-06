@@ -2,6 +2,7 @@ terraform {
   required_providers {
     coder = {
       source  = "coder/coder"
+      version = ">= 2.3.0"
     }
     docker = {
       source  = "kreuzwerker/docker"
@@ -63,6 +64,7 @@ data "coder_parameter" "cpu" {
   display_name = "CPU Cores"
   description  = "Override CPU cores (default comes from tool selection)."
   type         = "number"
+  form_type    = "slider"
   default      = local.profile.cpu
   mutable      = true
   order        = 2
@@ -77,6 +79,7 @@ data "coder_parameter" "memory" {
   display_name = "Memory (GB)"
   description  = "Override RAM (default comes from tool selection)."
   type         = "number"
+  form_type    = "slider"
   default      = local.profile.memory
   mutable      = true
   order        = 3
@@ -91,6 +94,7 @@ data "coder_parameter" "disk" {
   display_name = "Disk (GB)"
   description  = "Override disk (default comes from tool selection)."
   type         = "number"
+  form_type    = "slider"
   default      = local.profile.disk
   mutable      = false # disk is set at create time only
   order        = 4
