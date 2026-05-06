@@ -17,57 +17,87 @@ variable "image" {
 }
 
 # ------------------------------------------------------------------
-# Tool selection drives resource defaults
+# Multi-select tool picker — drives resource defaults via locals
 # ------------------------------------------------------------------
-data "coder_parameter" "tool" {
-  name         = "tool"
-  display_name = "Primary Tool / IDE"
-  description  = "Selecting a heavier IDE bumps CPU / RAM / DISK defaults."
-  type         = "string"
-  default      = "none"
+data "coder_parameter" "tools" {
+  name         = "tools"
+  display_name = "Tools / IDEs to install"
+  description  = "Pick one or more. Resource defaults adjust to fit the combined selection (max CPU, summed RAM/disk)."
+  type         = "list(string)"
+  form_type    = "multi-select"
+  default      = jsonencode([])
   mutable      = true
   order        = 1
 
   option {
-    name        = "None (lightweight shell)"
-    value       = "none"
-    description = "2 CPU, 2 GB RAM, 2 GB disk"
-  }
-  option {
     name        = "IntelliJ IDEA"
     value       = "intellij"
-    description = "4 CPU, 6 GB RAM, 10 GB disk"
+    description = "4 CPU baseline, 6 GB RAM, 10 GB disk"
+    icon        = "/icon/intellij.svg"
   }
   option {
     name        = "VS Code"
     value       = "vscode"
-    description = "2 CPU, 4 GB RAM, 5 GB disk"
+    description = "2 CPU baseline, 4 GB RAM, 5 GB disk"
+    icon        = "/icon/code.svg"
+  }
+  option {
+    name        = "Cursor"
+    value       = "cursor"
+    description = "2 CPU baseline, 4 GB RAM, 5 GB disk"
+    icon        = "/icon/cursor.svg"
   }
 }
 
 locals {
   tool_profiles = {
-    none     = { cpu = 2, memory = 2, disk = 2 }
     intellij = { cpu = 4, memory = 6, disk = 10 }
     vscode   = { cpu = 2, memory = 4, disk = 5 }
+    cursor   = { cpu = 2, memory = 4, disk = 5 }
   }
-  profile = local.tool_profiles[data.coder_parameter.tool.value]
+
+  selected = jsondecode(data.coder_parameter.tools.value)
+
+  # Aggregation strategy:
+  #   cpu    = max across selected tools (IDEs share CPU; heaviest sets baseline)
+  #   memory = sum across selected tools (each IDE keeps its own working set in RAM)
+  #   disk   = sum across selected tools (install footprints stack)
+  # Empty selection falls back to a 2/2/2 minimal profile.
+  profile = {
+    cpu    = length(local.selected) == 0 ? 2 : max(2, max([for t in local.selected : local.tool_profiles[t].cpu]...))
+    memory = length(local.selected) == 0 ? 2 : sum([for t in local.selected : local.tool_profiles[t].memory])
+    disk   = length(local.selected) == 0 ? 2 : sum([for t in local.selected : local.tool_profiles[t].disk])
+  }
+}
+
+# ------------------------------------------------------------------
+# Read-only summary so the user can see the derivation in the form
+# ------------------------------------------------------------------
+data "coder_parameter" "summary" {
+  name         = "summary"
+  display_name = "Computed profile"
+  description  = <<-EOT
+    Selected tools: ${length(local.selected) == 0 ? "(none)" : join(", ", local.selected)}
+
+    Defaults → CPU **${local.profile.cpu}** · RAM **${local.profile.memory} GB** · Disk **${local.profile.disk} GB**
+
+  EOT
 }
 
 # ------------------------------------------------------------------
 # Dynamic parameters: defaults reference the tool selection above.
-# Users can still override; if they don't, the tool profile wins.
+# Users can still override; if they don't, the computed profile wins.
 # Requires Coder >= 2.19 (dynamic parameters are GA).
 # ------------------------------------------------------------------
 data "coder_parameter" "cpu" {
   name         = "cpu"
   display_name = "CPU Cores"
-  description  = "Override CPU cores (default comes from tool selection)."
+  description  = "Override CPU cores (default = max across selected tools)."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.cpu
   mutable      = true
-  order        = 2
+  order        = 3
   validation {
     min = 1
     max = 16
@@ -77,12 +107,12 @@ data "coder_parameter" "cpu" {
 data "coder_parameter" "memory" {
   name         = "memory"
   display_name = "Memory (GB)"
-  description  = "Override RAM (default comes from tool selection)."
+  description  = "Override RAM (default = sum across selected tools)."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.memory
   mutable      = true
-  order        = 3
+  order        = 4
   validation {
     min = 1
     max = 64
@@ -92,12 +122,12 @@ data "coder_parameter" "memory" {
 data "coder_parameter" "disk" {
   name         = "disk"
   display_name = "Disk (GB)"
-  description  = "Override disk (default comes from tool selection)."
+  description  = "Override disk (default = sum across selected tools)."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.disk
   mutable      = false # disk is set at create time only
-  order        = 4
+  order        = 5
   validation {
     min = 1
     max = 200
@@ -105,37 +135,48 @@ data "coder_parameter" "disk" {
 }
 
 # ------------------------------------------------------------------
-# Optional: presets bundle a tool + matching resources as one click.
+# Presets — disabled for this template.
+#
+# Each preset would only set the `tools` multi-select, which the user can
+# already tick directly. Presets earn their keep when they bundle MANY
+# parameters at once (region + image + tool + env vars + sizing) so users
+# pick one blessed configuration instead of filling many fields. With a
+# single parameter to set, they are decorative — uncomment to re-enable.
 # ------------------------------------------------------------------
-data "coder_workspace_preset" "intellij" {
-  name = "IntelliJ (4 CPU / 6 GB / 10 GB)"
-  parameters = {
-    (data.coder_parameter.tool.name)   = "intellij"
-    #(data.coder_parameter.cpu.name)    = "4"
-    #(data.coder_parameter.memory.name) = "6"
-    #(data.coder_parameter.disk.name)   = "10"
-  }
-}
-
-data "coder_workspace_preset" "vscode" {
-  name = "VS Code (2 CPU / 4 GB / 5 GB)"
-  parameters = {
-    (data.coder_parameter.tool.name)   = "vscode"
-    #(data.coder_parameter.cpu.name)    = "2"
-    #(data.coder_parameter.memory.name) = "4"
-    #(data.coder_parameter.disk.name)   = "5"
-  }
-}
-
-data "coder_workspace_preset" "minimal" {
-  name = "Minimal (2 CPU / 2 GB / 2 GB)"
-  parameters = {
-    (data.coder_parameter.tool.name)   = "none"
-    #(data.coder_parameter.cpu.name)    = "2"
-    #(data.coder_parameter.memory.name) = "2"
-    #(data.coder_parameter.disk.name)   = "2"
-  }
-}
+# data "coder_workspace_preset" "minimal" {
+#   name = "Minimal (no IDE)"
+#   parameters = {
+#     (data.coder_parameter.tools.name) = jsonencode([])
+#   }
+# }
+#
+# data "coder_workspace_preset" "intellij_only" {
+#   name = "IntelliJ only"
+#   parameters = {
+#     (data.coder_parameter.tools.name) = jsonencode(["intellij"])
+#   }
+# }
+#
+# data "coder_workspace_preset" "vscode_only" {
+#   name = "VS Code only"
+#   parameters = {
+#     (data.coder_parameter.tools.name) = jsonencode(["vscode"])
+#   }
+# }
+#
+# data "coder_workspace_preset" "fullstack" {
+#   name = "Full-stack (IntelliJ + VS Code)"
+#   parameters = {
+#     (data.coder_parameter.tools.name) = jsonencode(["intellij", "vscode"])
+#   }
+# }
+#
+# data "coder_workspace_preset" "everything" {
+#   name = "Everything (IntelliJ + VS Code + Cursor)"
+#   parameters = {
+#     (data.coder_parameter.tools.name) = jsonencode(["intellij", "vscode", "cursor"])
+#   }
+# }
 
 # ------------------------------------------------------------------
 # Workspace plumbing
@@ -158,35 +199,37 @@ resource "coder_agent" "main" {
   arch           = data.coder_provisioner.me.arch
   startup_script = <<-EOT
     set -e
-    echo "🛠  Tool selected: ${data.coder_parameter.tool.value}"
+    SELECTED="${join(",", local.selected)}"
+    echo "🛠  Tools selected: $${SELECTED:-none}"
     echo "💻 CPU:    ${data.coder_parameter.cpu.value} cores"
     echo "🧠 Memory: ${data.coder_parameter.memory.value} GB"
     echo "💾 Disk:   ${data.coder_parameter.disk.value} GB (volume size hint)"
 
-    case "${data.coder_parameter.tool.value}" in
-      intellij)
-        echo "Installing IntelliJ Community (Projector/JetBrains Gateway-ready)…"
-        # Replace with your real installer / pre-baked image
-        ;;
-      vscode)
-        echo "VS Code will be available via the web IDE (code-server) display app."
-        ;;
-      none)
-        echo "Lightweight shell — no IDE bootstrapped."
-        ;;
-    esac
+    for tool in $(echo "$SELECTED" | tr ',' ' '); do
+      case "$tool" in
+        intellij)
+          echo "→ Installing IntelliJ Community (Projector / JetBrains Gateway-ready)…"
+          ;;
+        vscode)
+          echo "→ VS Code will be available via the web IDE (code-server) display app."
+          ;;
+        cursor)
+          echo "→ Installing Cursor…"
+          ;;
+      esac
+    done
   EOT
 
   display_apps {
-    vscode       = data.coder_parameter.tool.value == "vscode"
+    vscode       = contains(local.selected, "vscode")
     web_terminal = true
     ssh_helper   = true
   }
 
   metadata {
-    display_name = "Tool"
-    key          = "tool"
-    script       = "echo ${data.coder_parameter.tool.value}"
+    display_name = "Tools"
+    key          = "tools"
+    script       = "echo '${join(", ", local.selected)}'"
     interval     = 0
     timeout      = 1
   }
@@ -215,11 +258,10 @@ resource "docker_container" "workspace" {
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
   ]
 
-  # Resource limits driven by tool selection (or user override)
-  cpu_shares  = data.coder_parameter.cpu.value * 1024
-  memory      = data.coder_parameter.memory.value * 1024 # MB
-  # Note: storage_opts size is only enforced on overlay2 + xfs (with pquota)
-  # or btrfs. On Docker Desktop (Windows/Mac) this is accepted but advisory.
+  cpu_shares = data.coder_parameter.cpu.value * 1024
+  memory     = data.coder_parameter.memory.value * 1024 # MB
+  # storage_opts.size only enforced on overlay2 + xfs (pquota) or btrfs.
+  # On Docker Desktop (Win/Mac) it is accepted but advisory.
   storage_opts = {
     size = "${data.coder_parameter.disk.value}G"
   }
@@ -233,14 +275,14 @@ resource "docker_container" "workspace" {
   hostname = data.coder_workspace.me.name
 
   labels {
-    label = "coder.tool_profile"
-    value = data.coder_parameter.tool.value
+    label = "coder.tools"
+    value = join(",", local.selected)
   }
 }
 
 output "selected_profile" {
   value = {
-    tool   = data.coder_parameter.tool.value
+    tools  = local.selected
     cpu    = data.coder_parameter.cpu.value
     memory = data.coder_parameter.memory.value
     disk   = data.coder_parameter.disk.value
