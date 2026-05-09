@@ -46,9 +46,13 @@ We will compare size, installed packages, filesystem layout, and typical use‑c
    # Minimal
    docker run --rm registry.access.redhat.com/ubi9-minimal:latest rpm -qa | sort > minimal-packages.txt
 
-   # Micro
-   docker run --rm registry.access.redhat.com/ubi9-micro:latest rpm -qa | sort > micro-packages.txt
-   ```
+    # Micro (workaround since rpm is missing in the image)
+    docker create --name micro-tmp registry.access.redhat.com/ubi9-micro:latest
+    docker cp micro-tmp:/var/lib/rpm ./micro-rpm-db
+    docker rm micro-tmp
+    docker run --rm -v "$(pwd)/micro-rpm-db:/micro-rpm-db" registry.access.redhat.com/ubi9:latest rpm --dbpath /micro-rpm-db -qa | sort > micro-packages.txt
+    rm -rf ./micro-rpm-db
+    ```
    Compare the three files to see which packages have been stripped away.
 
 4. **Filesystem comparison** (optional but insightful)
