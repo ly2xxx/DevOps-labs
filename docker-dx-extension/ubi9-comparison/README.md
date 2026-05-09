@@ -56,11 +56,25 @@ We will compare size, installed packages, filesystem layout, and typical use‑c
    Compare the three files to see which packages have been stripped away.
 
 4. **Filesystem comparison** (optional but insightful)
+   Using `docker export` is the most reliable way to list all files across all variants (since `ubi9-micro` lacks `tar` and `find`).
+
    ```bash
-   docker run --rm -v $(pwd):/out registry.access.redhat.com/ubi9:latest tar -c . | tar -tv > full-fs.txt
-   docker run --rm -v $(pwd):/out registry.access.redhat.com/ubi9-minimal:latest tar -c . | tar -tv > minimal-fs.txt
-   docker run --rm -v $(pwd):/out registry.access.redhat.com/ubi9-micro:latest tar -c . | tar -tv > micro-fs.txt
+   # Full UBI9
+   docker create --name tmp-full registry.access.redhat.com/ubi9:latest
+   docker export tmp-full | tar -tv > full-fs.txt
+   docker rm tmp-full
+
+   # Minimal
+   docker create --name tmp-min registry.access.redhat.com/ubi9-minimal:latest
+   docker export tmp-min | tar -tv > minimal-fs.txt
+   docker rm tmp-min
+
+   # Micro
+   docker create --name tmp-micro registry.access.redhat.com/ubi9-micro:latest
+   docker export tmp-micro | tar -tv > micro-fs.txt
+   docker rm tmp-micro
    ```
+
    Look for directories like `/usr/share` or `/var/log` that disappear in the smaller images.
 
 5. **Run a quick sanity test**
