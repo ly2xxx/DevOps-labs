@@ -17,3 +17,6 @@ override.tf.json
 
 # Claude
 .claude
+
+# Local Coder Playground
+coder-templates/coder-playground/app/
