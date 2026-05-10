@@ -8,6 +8,10 @@ RUN npm install -g pnpm && apk add --no-cache git
 WORKDIR /app
 
 # The command to clone the repo (if missing), install dependencies, and start the Vite dev server
-CMD sh -c "if [ ! -f /app/package.json ]; then git clone https://github.com/coder/parameters-playground.git . ; fi && \
+CMD sh -c "if [ ! -f /app/package.json ]; then \
+             git clone https://github.com/coder/parameters-playground.git /tmp/playground && \
+             cp -r /tmp/playground/. /app/ && \
+             rm -rf /tmp/playground; \
+           fi && \
            pnpm install && \
            pnpm run dev --host 0.0.0.0"
