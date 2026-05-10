@@ -126,3 +126,5 @@ coder create ij-ws --template tool-based-resources --preset "IntelliJ (4 CPU / 6
 - Dynamic-parameter live-recompute requires the feature enabled in your Coder deployment (GA in 2.19+). If yours is older, the presets path still works.
 
 See [main.tf](coder-templates/tool-based-resources/main.tf) and [README.md](coder-templates/tool-based-resources/README.md) for the full lab. Want me to adapt this to a Kubernetes provider so the disk quota is actually enforced?
+
+![alt text](image.png)
