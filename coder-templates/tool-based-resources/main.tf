@@ -92,14 +92,14 @@ data "coder_parameter" "summary" {
 data "coder_parameter" "cpu" {
   name         = "cpu"
   display_name = "CPU Cores"
-  description  = "Override CPU cores (default = max across selected tools)."
+  description  = "Override CPU cores. Cannot be lower than selected tools baseline."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.cpu
   mutable      = true
   order        = 3
   validation {
-    min = 1
+    min = local.profile.cpu
     max = 16
   }
 }
@@ -107,14 +107,14 @@ data "coder_parameter" "cpu" {
 data "coder_parameter" "memory" {
   name         = "memory"
   display_name = "Memory (GB)"
-  description  = "Override RAM (default = sum across selected tools)."
+  description  = "Override RAM. Cannot be lower than selected tools baseline."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.memory
   mutable      = true
   order        = 4
   validation {
-    min = 1
+    min = local.profile.memory
     max = 64
   }
 }
@@ -122,14 +122,14 @@ data "coder_parameter" "memory" {
 data "coder_parameter" "disk" {
   name         = "disk"
   display_name = "Disk (GB)"
-  description  = "Override disk (default = sum across selected tools)."
+  description  = "Override disk. Cannot be lower than selected tools baseline."
   type         = "number"
   form_type    = "slider"
   default      = local.profile.disk
   mutable      = false # disk is set at create time only
   order        = 5
   validation {
-    min = 1
+    min = local.profile.disk
     max = 200
   }
 }

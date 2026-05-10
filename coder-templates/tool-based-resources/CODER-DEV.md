@@ -18,6 +18,12 @@ The template uses a "Parent-Child" parameter relationship.
 - **Reactive UI**: When a user selects "IntelliJ" in the UI, the CPU slider automatically moves to `4`. If they uncheck it, it moves back to `2`.
 - **Overrides**: Users can still manually move the sliders to override the "smart" defaults.
 
+### Dynamic Validation (Guardrails)
+- **Tool-Driven Constraints**: The `tools` parameter dynamically affects the `min` validation limits of the `cpu`, `memory`, and `disk` parameters.
+    - Setting `min = local.profile.cpu` ensures that a user cannot provision a workspace with fewer resources than their selected tools demand.
+    - Because the default matches the minimum, if a user tries to manually override the slider with a value below the calculated baseline, the Coder UI will automatically throw a red validation error.
+
+
 ---
 
 ## 2. Infrastructure Resources
