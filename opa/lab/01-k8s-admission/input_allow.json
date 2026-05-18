@@ -1,0 +1,29 @@
+{
+  "request": {
+    "uid": "abc-001",
+    "object": {
+      "metadata": {
+        "name": "trade-processor",
+        "namespace": "trading",
+        "labels": {
+          "compliance-zone": "pci-cardholder"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.finco.internal/trading/processor:v1.2.3",
+            "securityContext": {
+              "privileged": false,
+              "capabilities": { "add": [] }
+            },
+            "resources": {
+              "limits": { "cpu": "500m", "memory": "512Mi" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

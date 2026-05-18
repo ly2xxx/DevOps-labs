@@ -1,0 +1,14 @@
+{
+  "request": {
+    "path": "/api/v1/trades",
+    "method": "GET",
+    "hour_utc": 10,
+    "timestamp": "2026-05-18T10:30:00Z"
+  },
+  "jwt": {
+    "sub": "user-42",
+    "role": "trader",
+    "amr": ["password", "mfa"],
+    "exp": 9999999999
+  }
+}

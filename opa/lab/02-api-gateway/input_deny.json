@@ -1,0 +1,14 @@
+{
+  "request": {
+    "path": "/api/v1/trades/execute",
+    "method": "POST",
+    "hour_utc": 21,
+    "timestamp": "2026-05-18T21:00:00Z"
+  },
+  "jwt": {
+    "sub": "user-99",
+    "role": "analyst",
+    "amr": ["password"],
+    "exp": 9999999999
+  }
+}

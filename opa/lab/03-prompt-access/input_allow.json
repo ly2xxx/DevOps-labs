@@ -1,0 +1,18 @@
+{
+  "request": {
+    "timestamp": "2026-05-18T10:30:00Z"
+  },
+  "user": {
+    "id": "user-101",
+    "role": "analyst",
+    "features": {
+      "ai_access": true
+    }
+  },
+  "prompt": {
+    "category": "market_analysis",
+    "model": "claude-haiku-4-5",
+    "hash": "sha256:abc123def456789",
+    "token_count": 512
+  }
+}

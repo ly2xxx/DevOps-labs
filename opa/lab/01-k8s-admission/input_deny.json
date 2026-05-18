@@ -1,0 +1,26 @@
+{
+  "request": {
+    "uid": "xyz-999",
+    "object": {
+      "metadata": {
+        "name": "rogue-pod",
+        "namespace": "trading"
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "docker.io/nginx:latest",
+            "securityContext": {
+              "privileged": true,
+              "capabilities": { "add": ["SYS_ADMIN", "NET_ADMIN"] }
+            },
+            "resources": {
+              "limits": {}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

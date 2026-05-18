@@ -1,0 +1,8 @@
+{
+  "daily_limits": {
+    "retail":        10000,
+    "professional":  500000,
+    "institutional": 50000000
+  },
+  "approved_roles": ["analyst", "trader", "compliance_officer", "admin"]
+}

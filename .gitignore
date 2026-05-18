@@ -20,3 +20,7 @@ override.tf.json
 
 # Local Coder Playground
 coder-templates/coder-playground/app/
+
+# OPA
+opa/lab/output/
+opa.exe
