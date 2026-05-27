@@ -1,0 +1,57 @@
+# Single-node Kafka in KRaft mode (no ZooKeeper) + web UI.
+# Intentionally minimal so it boots fast on a laptop for interview practice.
+#
+#   docker compose up -d         # start broker + UI
+#   docker compose down          # stop (keeps the volume)
+#   docker compose down -v       # stop and wipe all data/topics
+#
+# Host clients (Python/Java on your machine)  -> localhost:9092
+# In-network clients (kafka-ui container)      -> kafka:19092
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # --- KRaft: this single node is BOTH the controller and the broker ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+
+      # --- Listeners ---
+      # HOST   = how your laptop reaches the broker (advertised as localhost:9092)
+      # DOCKER = how other containers reach it (advertised as kafka:19092)
+      KAFKA_LISTENERS: CONTROLLER://:9093,HOST://:9092,DOCKER://:19092
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,HOST:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+
+      # --- Single-node sizing: every internal topic must fit on one broker ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Let the labs create topics on first use (default partitions = 3).
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: prime-finance-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      DYNAMIC_CONFIG_ENABLED: "true"

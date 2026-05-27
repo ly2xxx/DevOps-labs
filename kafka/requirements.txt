@@ -1,0 +1,4 @@
+# confluent-kafka is the production-grade Python client (wraps librdkafka, the
+# same C library most banks run in production). It supports idempotent and
+# transactional producers, which kafka-python does not.
+confluent-kafka>=2.5.0
