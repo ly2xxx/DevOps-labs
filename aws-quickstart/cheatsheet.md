@@ -159,6 +159,7 @@ Fn::Base64: !Sub |
 ### Stack Dependencies (Exports/Imports)
 
 **Stack A (exports):**
+
 ```yaml
 Outputs:
   VPCId:
@@ -168,6 +169,7 @@ Outputs:
 ```
 
 **Stack B (imports):**
+
 ```yaml
 Resources:
   MyInstance:
@@ -243,6 +245,7 @@ Resources:
 ```
 
 Then use it:
+
 ```bash
 aws cloudformation create-stack \
   --stack-name my-stack \

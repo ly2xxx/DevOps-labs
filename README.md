@@ -12,6 +12,19 @@ Practical Docker tutorials with real-world use cases for Barclays platform engin
 
 ---
 
+## 📋 Cheatsheet Index
+
+Quick references and command guides for the various technologies used throughout these DevOps labs:
+
+| Technology / Platform | Cheatsheet | Description | Key Topics & Commands Covered |
+| :--- | :--- | :--- | :--- |
+| 🐳 **Docker** | [Docker Command Cheat Sheet](CHEATSHEET.md) | Command reference for Docker & Docker Compose container management and builds. | `docker build/run/exec/logs`, multi-stage builds, network & volume configs, system prune cleanup, Dockerfile instructions. |
+| ☁️ **AWS** | [AWS CloudFormation & Service Catalog Cheatsheet](aws-quickstart/cheatsheet.md) | Reference guide for CloudFormation templates and Service Catalog operations. | `aws cloudformation`, `aws servicecatalog`, template intrinsic functions (`!Ref`, `!GetAtt`, `!Sub`), IAM roles, stack dependencies, CI/CD integration. |
+| ☁️ **GCP** | [GCP Cloud Run & Scheduler Cheatsheet](gcp-quickstart/cheatsheet.md) | Guide for deploying and managing services on Cloud Run and scheduling triggers. | `gcloud run/scheduler/builds/logging`, service account IAM, cron schedule syntax, deployment patterns, troubleshooting commands. |
+| 🔴 **OpenShift** | [OpenShift CLI Quick Reference](openshift-quickstart/cheatsheet.md) | Command reference for container deployments and cluster management in OpenShift (K8s compatible). | `oc login/new-project/new-app/expose`, pod logs & debugging commands (`oc exec/port-forward`), Helm integration, security & RBAC (`oc adm policy`). |
+
+---
+
 ## 🎯 Use Case: UBI9-Minimal Coder Template
 
 **Business Context:**  
