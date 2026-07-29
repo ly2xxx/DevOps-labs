@@ -14,7 +14,8 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 | [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml)             | `Deployment` | Manages 5 Nginx pods with resource limits, probes (startup, liveness, readiness), and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml)                   | `Service`    | Exposes Nginx pods internally via ClusterIP on port 80                                              |
 | [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service`    | Exposes Nginx pods externally on host node port 32008 using NodePort                                |
-| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml)                   | `Ingress`    | Layer 7 HTTP router managing domain (`webserver.local`) & path routing (`/` and `/docs`)      |
+| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml) | `Ingress` | Layer 7 HTTP router for root path (`/`) |
+| [`ingress-docs.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress-docs.yaml) | `Ingress` | Dedicated Layer 7 Ingress rewriting `/docs` to `/docs.html` |
 | [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml)                   | `Pod`        | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing                        |
 
 ---
@@ -331,6 +332,7 @@ kubectl delete -f deployment.yaml
 kubectl delete -f service_nodeport.yaml
 kubectl delete -f service.yaml
 kubectl delete -f ingress.yaml
+kubectl delete -f ingress-docs.yaml
 kubectl delete -f secret.yaml
 kubectl delete -f configmap.yaml
 kubectl delete -f curlpod.yaml

@@ -1,15 +1,18 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: web-ingress
+  name: docs-ingress
+  annotations:
+    # Dedicated rewrite-target rule for /docs path
+    nginx.ingress.kubernetes.io/rewrite-target: /docs.html
 spec:
   ingressClassName: nginx
   rules:
   - host: webserver.local
     http:
       paths:
-      - path: /
-        pathType: Prefix
+      - path: /docs
+        pathType: Exact
         backend:
           service:
             name: web-service
