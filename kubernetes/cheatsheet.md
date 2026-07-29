@@ -1,6 +1,6 @@
 # Kubernetes Hands-On Cheat Sheet
 
-A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanics, and step-by-step rollout commands executed during our lab session on Docker Desktop Kubernetes.
+A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanics, production Namespaces, and step-by-step commands executed during our lab session on Docker Desktop Kubernetes.
 
 ---
 
@@ -8,6 +8,7 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 
 | File | Resource Type | Description |
 | :--- | :--- | :--- |
+| [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml) | `Namespace` | Defines the isolated `prod` (production) namespace boundary |
 | [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `webserver-configmap` containing HTML content & key-value env vars |
 | [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes, and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml) | `Service` | Exposes Nginx pods internally via ClusterIP on port 80 |
@@ -51,7 +52,54 @@ kubectl rollout restart deployment webserver-deployment
 
 ---
 
-## 🔍 3. Verification & Inspection Commands
+## 🏢 3. Production Namespace (`prod`) Setup
+
+Namespaces provide logical isolation, resource quotas, and environment separation (`dev`, `staging`, `prod`).
+
+### `namespace.yaml` Manifest
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    environment: production
+```
+
+### Deploying Workloads into `prod` Namespace
+```powershell
+# 1. Create the prod namespace
+kubectl apply -f namespace.yaml
+# (Or CLI equivalent: kubectl create namespace prod)
+
+# 2. Deploy ConfigMap, Deployment, and Service (ClusterIP) into prod
+kubectl apply -f configmap.yaml -n prod
+kubectl apply -f deployment.yaml -n prod
+kubectl apply -f service.yaml -n prod
+# Note: Use service.yaml (ClusterIP) because NodePort (32008) is cluster-wide and bound by the default namespace!
+
+# 3. Inspect resources inside the prod namespace
+kubectl get pods -n prod
+kubectl get svc -n prod
+kubectl get all -n prod
+
+# 4. View resources across ALL namespaces in the cluster
+kubectl get pods -A
+```
+
+### Cross-Namespace DNS Communication
+Pods in another namespace (e.g. `dev`) can access the service in `prod` using Full Qualified Domain Names (FQDN):
+
+$$\text{\texttt{http://<service-name>.<namespace>.svc.cluster.local}}$$
+
+```powershell
+# Example: Calling prod service from curlpod in default namespace
+kubectl exec curlpod -- curl -s http://web-service.prod.svc.cluster.local
+```
+
+---
+
+## 🔍 4. Verification & Inspection Commands
 
 ### Check Pod & Service Status
 ```powershell
@@ -98,7 +146,7 @@ kubectl logs -f -l app=webserver --all-containers
 
 ---
 
-## ⚙️ 4. ReplicaSet Architecture & Rollout Management
+## ⚙️ 5. ReplicaSet Architecture & Rollout Management
 
 ### Architecture Hierarchy
 ```text
@@ -145,7 +193,7 @@ kubectl rollout undo deployment webserver-deployment --to-revision=1
 
 ---
 
-## 🌐 5. Accessing the Application
+## 🌐 6. Accessing the Application
 
 ### Access from Host Browser (NodePort)
 Open browser directly at:
@@ -176,7 +224,7 @@ Access at `http://localhost:8888`
 
 ---
 
-## 🧪 6. Self-Healing & Scaling Experiments
+## 🧪 7. Self-Healing & Scaling Experiments
 
 ### Self-Healing Test
 Delete a running pod to observe Kubernetes automatically creating a replacement:
@@ -199,14 +247,18 @@ kubectl scale deployment webserver-deployment --replicas=5
 
 ---
 
-## 🧹 7. Full Teardown & Cleanup
+## 🧹 8. Full Teardown & Cleanup
 
 Remove all resources created during this lab session:
 
 ```powershell
+# Delete default namespace resources
 kubectl delete -f deployment.yaml
 kubectl delete -f service_nodeport.yaml
 kubectl delete -f service.yaml
 kubectl delete -f configmap.yaml
 kubectl delete -f curlpod.yaml
+
+# Delete prod namespace and all its resources
+kubectl delete -f namespace.yaml
 ```
