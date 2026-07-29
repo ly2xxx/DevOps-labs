@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  annotations:
+    # Rewrite /docs requests to /docs.html on the backend webserver
+    nginx.ingress.kubernetes.io/rewrite-target: /docs.html
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: webserver.local
+    http:
+      paths:
+      # Main root path: http://webserver.local/ (Serves index.html)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+
+      # Docs path: http://webserver.local/docs (Rewrites to docs.html)
+      - path: /docs
+        pathType: Exact
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80

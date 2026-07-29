@@ -10,9 +10,11 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 | :--- | :--- | :--- |
 | [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml) | `Namespace` | Defines the isolated `prod` (production) namespace boundary |
 | [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `webserver-configmap` containing HTML content & key-value env vars |
-| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes, and volume mounts |
+| [`secret.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/secret.yaml) | `Secret` | Stores Base64-encoded sensitive data (`DB_PASSWORD`, `API_KEY`) |
+| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes (startup, liveness, readiness), and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml) | `Service` | Exposes Nginx pods internally via ClusterIP on port 80 |
 | [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service` | Exposes Nginx pods externally on host node port 32008 using NodePort |
+| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml) | `Ingress` | Layer 7 HTTP router managing domain (`webserver.local`) & path routing (`/` and `/docs`) |
 | [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml) | `Pod` | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing |
 
 ---
@@ -247,7 +249,43 @@ kubectl scale deployment webserver-deployment --replicas=5
 
 ---
 
-## 🧹 8. Full Teardown & Cleanup
+## 🎯 9. Essential DevOps & Kubernetes Interview Q&A
+
+### Q1: What is the difference between `LivenessProbe`, `ReadinessProbe`, and `StartupProbe`?
+* **`LivenessProbe`**: Checks if container is alive. If it fails $\rightarrow$ Kubernetes kills and restarts container.
+* **`ReadinessProbe`**: Checks if container is ready to handle traffic. If it fails $\rightarrow$ Kubernetes removes pod IP from Service Endpoints (stops routing traffic to it) without restarting it.
+* **`StartupProbe`**: Protects slow-starting applications during startup by disabling liveness/readiness probes until the app initializes.
+
+### Q2: What is the difference between `Deployment`, `StatefulSet`, and `DaemonSet`?
+* **`Deployment`**: Best for **stateless** apps (Nginx). Manages Pod revisions via **`ReplicaSet`** objects.
+* **`StatefulSet`**: Best for **stateful** databases (PostgreSQL, Kafka). Pods have sticky identities (`pod-0`) and manage revisions via **`ControllerRevision`** (`controllerrevisions.apps`) objects instead of ReplicaSets.
+* **`DaemonSet`**: Runs 1 pod copy on **every node** (logging/monitoring agents), also using **`ControllerRevision`**.
+
+```powershell
+# Inspect ControllerRevisions (used by StatefulSets & DaemonSets)
+kubectl get controllerrevisions
+kubectl get controllerrevisions -o yaml
+```
+
+### Q3: What is the difference between `Resource Requests` and `Resource Limits`?
+* **`Requests`**: Minimum CPU/RAM guaranteed and reserved for pod scheduling.
+* **`Limits`**: Hard ceiling for CPU/RAM usage.
+  * Exceeding RAM limit $\rightarrow$ **`OOMKilled`** (Exit Code 137, container killed).
+  * Exceeding CPU limit $\rightarrow$ **CPU Throttled** (container slowed down, not killed).
+
+### Q4: How do `ConfigMaps` differ from `Secrets`?
+* **`ConfigMap`**: Plaintext non-sensitive configuration data (`APP_ENV`, `nginx.conf`).
+* **`Secret`**: Confidential data (passwords, API tokens, TLS keys). Stored as Base64 encoded strings in YAML (or encrypted at rest via KMS/Vault).
+
+### Q5: What is the difference between `Service` types and `Ingress`?
+* **`ClusterIP`**: Internal virtual IP only reachable inside cluster.
+* **`NodePort`**: Exposes service on a static host port (30000-32767) across all nodes (Cluster-Wide).
+* **`LoadBalancer`**: Provisions an external Cloud Load Balancer (AWS ELB / GCP LB).
+* **`Ingress`**: Layer 7 HTTP/HTTPS reverse-proxy router managing domain name routing, SSL termination, and path routes (`/api` vs `/app`).
+
+---
+
+## 🧹 10. Full Teardown & Cleanup
 
 Remove all resources created during this lab session:
 
@@ -256,6 +294,8 @@ Remove all resources created during this lab session:
 kubectl delete -f deployment.yaml
 kubectl delete -f service_nodeport.yaml
 kubectl delete -f service.yaml
+kubectl delete -f ingress.yaml
+kubectl delete -f secret.yaml
 kubectl delete -f configmap.yaml
 kubectl delete -f curlpod.yaml
 

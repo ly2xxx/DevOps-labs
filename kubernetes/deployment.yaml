@@ -17,7 +17,7 @@ spec:
       containers:
       - name: nginx
         image: nginx
-        command: ["sh", "-c", "envsubst '$APP_ENV $MAX_CONNECTIONS' < /tmp/template/index.html > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'"]
+        command: ["sh", "-c", "envsubst '$APP_ENV $MAX_CONNECTIONS' < /tmp/template/index.html > /usr/share/nginx/html/index.html && envsubst '$APP_ENV $MAX_CONNECTIONS' < /tmp/template/docs.html > /usr/share/nginx/html/docs.html && nginx -g 'daemon off;'"]
         ports:
         - containerPort: 80
         # Inject Key/Value ConfigMap data as Environment Variables (Bulk)
@@ -36,11 +36,25 @@ spec:
             configMapKeyRef:
               name: webserver-configmap
               key: MAX_CONNECTIONS
+        # Secret Injection (Decoded from Base64)
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webserver-secret
+              key: DB_PASSWORD
         resources:
           requests:
             memory: "150Mi"
           limits:
             memory: "300Mi"
+        # Startup Probe (Protects slow-booting applications)
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          failureThreshold: 30
         livenessProbe:
           httpGet:
             path: /
@@ -65,4 +79,6 @@ spec:
           items:
           - key: index.html
             path: index.html
+          - key: docs.html
+            path: docs.html
 
