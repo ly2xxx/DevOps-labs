@@ -27,7 +27,9 @@ data:
     </head>
     <body>
       <center>
-        <h1 class="tray">Hello, Kuber!</h1>
+        <h1 class="tray">Hello, Kubers!</h1>
+        <p>Environment: <strong>$APP_ENV</strong></p>
+        <p>Max Connections: <strong>$MAX_CONNECTIONS</strong></p>
       </center>
     </body>
     </html>

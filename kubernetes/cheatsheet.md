@@ -73,16 +73,17 @@ kubectl get configmaps
 kubectl get configmap webserver-configmap -o yaml
 
 # Verify environment variables inside container
-kubectl exec deployment/webserver-deployment -- printenv | grep -E "APP_ENV|LOG_LEVEL|MAX_CONNECTIONS"
+kubectl exec deployment/webserver-deployment -- printenv | grep -E "APP_ENV|MAX_CONNECTIONS"
+
+# Check container startup log output printing the env vars
+kubectl logs deployment/webserver-deployment --tail=5
 ```
 
 ---
 
-## 💡 4. DevOps Interview Corner: ConfigMap Use Cases
-
-| Consumption Method | Primary Use Case | YAML Syntax | Dynamic Update Behavior |
-| :--- | :--- | :--- | :--- |
-| **Volume Mount** | Whole configuration files (`index.html`, `nginx.conf`, `appsettings.json`) | `spec.containers[].volumeMounts` + `spec.volumes[].configMap` | Automatically updates inside mounted directory (or requires `rollout restart` for instant pickup) |
+| **Dynamic HTML (`envsubst`)** | Rendering container env vars into static HTML at startup | `command:` running `envsubst` reading `/tmp/template/index.html` | Submits rendered HTML with `$APP_ENV` & `$MAX_CONNECTIONS` into Nginx web root |
+| **Volume Mount (Selective Items)** | Whole files (`index.html`, `nginx.conf`) without dumping extra key/values | `spec.volumes[].configMap.items` (`key` & `path`) | Creates *only* specified key files inside the mounted directory |
+| **Volume Mount (All Keys)** | Mounts all keys under `data:` as files | `spec.containers[].volumeMounts` + `spec.volumes[].configMap` | Creates a file for every key in the directory |
 | **Environment Variables (`envFrom`)** | Scalar Key/Value configs (`LOG_LEVEL`, `APP_ENV`, `DB_PORT`) | `spec.containers[].envFrom.configMapRef` | Requires Pod restart (`rollout restart`) to update container process env vars |
 | **Individual Env Key (`env`)** | Single key mapping (`valueFrom.configMapKeyRef`) | `spec.containers[].env[].valueFrom` | Requires Pod restart to update |
 
