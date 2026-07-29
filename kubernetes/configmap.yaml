@@ -1,8 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: index-html-configmap
+  name: webserver-configmap
 data:
+  # =========================================================================
+  # USE CASE 1: File-like Configuration (Mounted as Volume: /usr/share/nginx/html/)
+  # =========================================================================
   index.html: |
     <!DOCTYPE html>
     <html lang="en">
@@ -24,7 +27,15 @@ data:
     </head>
     <body>
       <center>
-        <h1 class="tray">Hello, Kubernetes!</h1>
+        <h1 class="tray">Hello, Kuber!</h1>
       </center>
     </body>
     </html>
+
+  # =========================================================================
+  # USE CASE 2: Key/Value Scalar Configs (Injected via Environment Variables)
+  # =========================================================================
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  MAX_CONNECTIONS: "100"
+  FEATURE_TOGGLE_NEW_UI: "true"

@@ -8,7 +8,7 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 
 | File | Resource Type | Description |
 | :--- | :--- | :--- |
-| [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `index-html-configmap` containing styled HTML content |
+| [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `webserver-configmap` containing HTML content & key-value env vars |
 | [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes, and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml) | `Service` | Exposes Nginx pods internally via ClusterIP on port 80 |
 | [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service` | Exposes Nginx pods externally on host node port 32008 using NodePort |
@@ -27,7 +27,7 @@ kubectl apply -f configmap.yaml
 ```
 
 ### Step 2: Deploy the Webserver Application
-Applies the Nginx deployment configured with probes and mounting `index-html-configmap` into `/usr/share/nginx/html/`:
+Applies the Nginx deployment configured with probes and mounting `webserver-configmap` into `/usr/share/nginx/html/`:
 ```powershell
 kubectl apply -f deployment.yaml
 ```
@@ -67,11 +67,24 @@ kubectl describe svc web-service
 kubectl get endpoints web-service
 ```
 
-### Check ConfigMap Content
+### Check ConfigMap Content & Environment Variables
 ```powershell
 kubectl get configmaps
-kubectl get configmap index-html-configmap -o yaml
+kubectl get configmap webserver-configmap -o yaml
+
+# Verify environment variables inside container
+kubectl exec deployment/webserver-deployment -- printenv | grep -E "APP_ENV|LOG_LEVEL|MAX_CONNECTIONS"
 ```
+
+---
+
+## 💡 4. DevOps Interview Corner: ConfigMap Use Cases
+
+| Consumption Method | Primary Use Case | YAML Syntax | Dynamic Update Behavior |
+| :--- | :--- | :--- | :--- |
+| **Volume Mount** | Whole configuration files (`index.html`, `nginx.conf`, `appsettings.json`) | `spec.containers[].volumeMounts` + `spec.volumes[].configMap` | Automatically updates inside mounted directory (or requires `rollout restart` for instant pickup) |
+| **Environment Variables (`envFrom`)** | Scalar Key/Value configs (`LOG_LEVEL`, `APP_ENV`, `DB_PORT`) | `spec.containers[].envFrom.configMapRef` | Requires Pod restart (`rollout restart`) to update container process env vars |
+| **Individual Env Key (`env`)** | Single key mapping (`valueFrom.configMapKeyRef`) | `spec.containers[].env[].valueFrom` | Requires Pod restart to update |
 
 ---
 
