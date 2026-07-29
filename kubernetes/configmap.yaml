@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: index-html-configmap
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport"
+            content="width=device-width,
+                     initial-scale=1.0">
+      <title>Hello Kubernetes</title>
+      <style>
+        .tray {
+          display: inline-block;
+          background-color: LightCoral;
+          color: white;
+          padding: 10px;
+          border-radius: 5px;
+        }
+      </style>
+    </head>
+    <body>
+      <center>
+        <h1 class="tray">Hello, Kubernetes!</h1>
+      </center>
+    </body>
+    </html>

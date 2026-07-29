@@ -1,6 +1,6 @@
 # Kubernetes Hands-On Cheat Sheet
 
-A comprehensive summary of the Kubernetes resources created and commands executed during our lab session on Docker Desktop Kubernetes.
+A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanics, and step-by-step rollout commands executed during our lab session on Docker Desktop Kubernetes.
 
 ---
 
@@ -8,92 +8,182 @@ A comprehensive summary of the Kubernetes resources created and commands execute
 
 | File | Resource Type | Description |
 | :--- | :--- | :--- |
-| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 3-5 Nginx webserver pods with resource limits and probes |
+| [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `index-html-configmap` containing styled HTML content |
+| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes, and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml) | `Service` | Exposes Nginx pods internally via ClusterIP on port 80 |
-| [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml) | `Pod` | Lightweight utility pod (`curlimages/curl`) for in-cluster network debugging |
+| [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service` | Exposes Nginx pods externally on host node port 32008 using NodePort |
+| [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml) | `Pod` | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing |
 
 ---
 
-## 🚀 2. Deploying & Managing Applications
+## 🔄 2. Full Deployment Cycle (Step-by-Step)
 
-### Apply Configurations
+Follow this order of execution for a clean, end-to-end deployment:
+
+### Step 1: Create the ConfigMap
+Must be created first so volume mounts in the deployment template can reference it:
 ```powershell
-# Apply all resources in the folder
+kubectl apply -f configmap.yaml
+```
+
+### Step 2: Deploy the Webserver Application
+Applies the Nginx deployment configured with probes and mounting `index-html-configmap` into `/usr/share/nginx/html/`:
+```powershell
 kubectl apply -f deployment.yaml
-kubectl apply -f service.yaml
+```
+
+### Step 3: Expose via NodePort Service
+Upgrades or applies the service as a `NodePort` mapping internal port 80 to host port 32008:
+```powershell
+kubectl apply -f service_nodeport.yaml
+```
+
+### Step 4: Deploy In-Cluster Debugging Pod
+```powershell
 kubectl apply -f curlpod.yaml
 ```
 
-### Inspecting Resources
+### Step 5: Force Rollout Restart (If ConfigMap content/mounts were updated)
+Ensures all pod replicas restart and pick up the latest mounted ConfigMap files:
 ```powershell
-# List running pods
+kubectl rollout restart deployment webserver-deployment
+```
+
+---
+
+## 🔍 3. Verification & Inspection Commands
+
+### Check Pod & Service Status
+```powershell
+# List all running pods
 kubectl get pods
 
-# View detailed status of deployment
+# View detailed status of deployment & rollout progress
 kubectl describe deployment webserver-deployment
+kubectl rollout status deployment webserver-deployment
 
-# View detailed status of service & mapped endpoint IPs
+# View detailed status of service & mapped pod endpoints
 kubectl describe svc web-service
 kubectl get endpoints web-service
 ```
 
----
-
-## 🔄 3. Self-Healing & Scaling Experiments
-
-### Self-Healing Test
-Delete a running pod to observe Kubernetes automatically replacing it to maintain the requested replica count:
+### Check ConfigMap Content
 ```powershell
-# Delete a specific pod
-kubectl delete pod webserver-deployment-6dcf4bdfbc-28n8t
-
-# Verify new pod generation
-kubectl get pods
-```
-
-### Scaling Replicas
-Scale the number of running pod instances dynamically:
-```powershell
-# Scale deployment down to 3 replicas
-kubectl scale deployment webserver-deployment --replicas=3
+kubectl get configmaps
+kubectl get configmap index-html-configmap -o yaml
 ```
 
 ---
 
-## 🌐 4. Networking & Accessing Services
+## ⚙️ 4. ReplicaSet Architecture & Rollout Management
 
-### ClusterIP vs. Host Reachability
-- **`ClusterIP`** (e.g. `10.104.21.173`) is an internal virtual IP **only reachable within the Kubernetes cluster overlay network**.
-- Host machine (Windows OS) cannot directly ping or curl `ClusterIP` addresses.
+### Architecture Hierarchy
+```text
+Deployment (webserver-deployment)
+   └── ReplicaSet (webserver-deployment-7c8f765b79) [Revision 3]
+          ├── Pod (webserver-deployment-7c8f765b79-dcf5p)
+          ├── Pod (webserver-deployment-7c8f765b79-m9skp)
+          ├── Pod (webserver-deployment-7c8f765b79-qqnnk)
+          ├── Pod (webserver-deployment-7c8f765b79-tq22r)
+          └── Pod (webserver-deployment-7c8f765b79-wtcqq)
+```
 
-### In-Cluster Debugging with `curlpod`
-Execute `curl` commands directly inside the cluster network to verify service routing:
+### Understanding ReplicaSets (`kubectl get replicaset`)
+* Every time `deployment.yaml` spec is modified or a rollout restart is triggered, Kubernetes creates a **new ReplicaSet**.
+* The **pod name** contains the hash identifier of its parent ReplicaSet:
+  * Pod: `webserver-deployment-7c8f765b79-dcf5p` $\rightarrow$ ReplicaSet: `webserver-deployment-7c8f765b79`
+* Old ReplicaSets are kept (`DESIRED: 0`) to allow instant rollbacks.
+
+### Rollout Commands Reference
+
+```powershell
+# 1. Trigger a rolling restart of all pods (zero downtime)
+kubectl rollout restart deployment webserver-deployment
+
+# 2. Check current rollout status
+kubectl rollout status deployment webserver-deployment
+
+# 3. View revision history
+kubectl rollout history deployment webserver-deployment
+
+# 4. View details of a specific revision
+kubectl rollout history deployment webserver-deployment --revision=2
+
+# 5. Roll back to the previous revision
+kubectl rollout undo deployment webserver-deployment
+
+# 6. Roll back to a specific target revision
+kubectl rollout undo deployment webserver-deployment --to-revision=1
+```
+
+### Rollback Revision Mechanics
+* When you run `kubectl rollout undo`, Kubernetes promotes the target historical ReplicaSet back to active status (`DESIRED: 5`) and sets the current ReplicaSet to `DESIRED: 0`.
+* The newly promoted ReplicaSet receives a **new Revision Number** (e.g., rolling back from Revision 3 to Revision 2 creates Revision 4, consuming Revision 2).
+
+---
+
+## 🌐 5. Accessing the Application
+
+### Access from Host Browser (NodePort)
+Open browser directly at:
+```text
+http://localhost:32008
+```
+Or test via host PowerShell:
+```powershell
+curl http://localhost:32008
+```
+
+### In-Cluster Verification using `curlpod`
+Execute `curl` commands directly inside the cluster overlay network:
 ```powershell
 # Test service by DNS name
 kubectl exec curlpod -- curl -s http://web-service
 
-# Test service by ClusterIP
+# Test service by ClusterIP directly
 kubectl exec curlpod -- curl -s http://10.104.21.173
 ```
 
-### Accessing Service from Host Machine (`port-forward`)
-Forward a local host port to the internal Kubernetes service port:
+### Alternative: Access via `kubectl port-forward`
 ```powershell
-# Forward local port 8888 to service port 80
+# Forward local host port 8888 to service port 80
 kubectl port-forward svc/web-service 8888:80
 ```
-Access in browser or host terminal:
-```text
-http://localhost:8888
+Access at `http://localhost:8888`
+
+---
+
+## 🧪 6. Self-Healing & Scaling Experiments
+
+### Self-Healing Test
+Delete a running pod to observe Kubernetes automatically creating a replacement:
+```powershell
+# Delete a specific pod
+kubectl delete pod <pod-name>
+
+# Verify replacement pod is spawned
+kubectl get pods
+```
+
+### Dynamic Replica Scaling
+```powershell
+# Scale deployment down to 3 replicas
+kubectl scale deployment webserver-deployment --replicas=3
+
+# Scale deployment back to 5 replicas
+kubectl scale deployment webserver-deployment --replicas=5
 ```
 
 ---
 
-## 🧹 5. Cleanup Commands
+## 🧹 7. Full Teardown & Cleanup
+
+Remove all resources created during this lab session:
 
 ```powershell
-# Delete created resources
 kubectl delete -f deployment.yaml
+kubectl delete -f service_nodeport.yaml
 kubectl delete -f service.yaml
+kubectl delete -f configmap.yaml
 kubectl delete -f curlpod.yaml
 ```
