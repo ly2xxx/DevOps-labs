@@ -79,6 +79,15 @@ kubectl exec deployment/webserver-deployment -- printenv | grep -E "APP_ENV|MAX_
 kubectl logs deployment/webserver-deployment --tail=5
 ```
 
+### Live Log Streaming
+```powershell
+# Stream logs live from a deployment
+kubectl logs -f deployment/webserver-deployment
+
+# Stream live logs from ALL pod replicas simultaneously
+kubectl logs -f -l app=webserver --all-containers
+```
+
 ---
 
 | **Dynamic HTML (`envsubst`)** | Rendering container env vars into static HTML at startup | `command:` running `envsubst` reading `/tmp/template/index.html` | Submits rendered HTML with `$APP_ENV` & `$MAX_CONNECTIONS` into Nginx web root |
