@@ -6,16 +6,16 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 
 ## 📁 1. Project Files Overview
 
-| File | Resource Type | Description |
-| :--- | :--- | :--- |
-| [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml) | `Namespace` | Defines the isolated `prod` (production) namespace boundary |
-| [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml) | `ConfigMap` | Defines `webserver-configmap` containing HTML content & key-value env vars |
-| [`secret.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/secret.yaml) | `Secret` | Stores Base64-encoded sensitive data (`DB_PASSWORD`, `API_KEY`) |
-| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml) | `Deployment` | Manages 5 Nginx pods with resource limits, probes (startup, liveness, readiness), and volume mounts |
-| [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml) | `Service` | Exposes Nginx pods internally via ClusterIP on port 80 |
-| [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service` | Exposes Nginx pods externally on host node port 32008 using NodePort |
-| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml) | `Ingress` | Layer 7 HTTP router managing domain (`webserver.local`) & path routing (`/` and `/docs`) |
-| [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml) | `Pod` | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing |
+| File                                                                                        | Resource Type  | Description                                                                                         |
+| :------------------------------------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------------- |
+| [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml)               | `Namespace`  | Defines the isolated`prod` (production) namespace boundary                                        |
+| [`configmap.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/configmap.yaml)               | `ConfigMap`  | Defines`webserver-configmap` containing HTML content & key-value env vars                         |
+| [`secret.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/secret.yaml)                     | `Secret`     | Stores Base64-encoded sensitive data (`DB_PASSWORD`, `API_KEY`)                                 |
+| [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml)             | `Deployment` | Manages 5 Nginx pods with resource limits, probes (startup, liveness, readiness), and volume mounts |
+| [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml)                   | `Service`    | Exposes Nginx pods internally via ClusterIP on port 80                                              |
+| [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service`    | Exposes Nginx pods externally on host node port 32008 using NodePort                                |
+| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml)                   | `Ingress`    | Layer 7 HTTP router managing domain (`webserver.local`) & path routing (`/` and `/docs`)      |
+| [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml)                   | `Pod`        | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing                        |
 
 ---
 
@@ -24,30 +24,39 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 Follow this order of execution for a clean, end-to-end deployment:
 
 ### Step 1: Create the ConfigMap
+
 Must be created first so volume mounts in the deployment template can reference it:
+
 ```powershell
 kubectl apply -f configmap.yaml
 ```
 
 ### Step 2: Deploy the Webserver Application
+
 Applies the Nginx deployment configured with probes and mounting `webserver-configmap` into `/usr/share/nginx/html/`:
+
 ```powershell
 kubectl apply -f deployment.yaml
 ```
 
 ### Step 3: Expose via NodePort Service
+
 Upgrades or applies the service as a `NodePort` mapping internal port 80 to host port 32008:
+
 ```powershell
 kubectl apply -f service_nodeport.yaml
 ```
 
 ### Step 4: Deploy In-Cluster Debugging Pod
+
 ```powershell
 kubectl apply -f curlpod.yaml
 ```
 
 ### Step 5: Force Rollout Restart (If ConfigMap content/mounts were updated)
+
 Ensures all pod replicas restart and pick up the latest mounted ConfigMap files:
+
 ```powershell
 kubectl rollout restart deployment webserver-deployment
 ```
@@ -59,6 +68,7 @@ kubectl rollout restart deployment webserver-deployment
 Namespaces provide logical isolation, resource quotas, and environment separation (`dev`, `staging`, `prod`).
 
 ### `namespace.yaml` Manifest
+
 ```yaml
 apiVersion: v1
 kind: Namespace
@@ -69,6 +79,7 @@ metadata:
 ```
 
 ### Deploying Workloads into `prod` Namespace
+
 ```powershell
 # 1. Create the prod namespace
 kubectl apply -f namespace.yaml
@@ -90,9 +101,12 @@ kubectl get pods -A
 ```
 
 ### Cross-Namespace DNS Communication
+
 Pods in another namespace (e.g. `dev`) can access the service in `prod` using Full Qualified Domain Names (FQDN):
 
-$$\text{\texttt{http://<service-name>.<namespace>.svc.cluster.local}}$$
+$$
+\text{\texttt{http://<service-name>.<namespace>.svc.cluster.local}}
+$$
 
 ```powershell
 # Example: Calling prod service from curlpod in default namespace
@@ -104,6 +118,7 @@ kubectl exec curlpod -- curl -s http://web-service.prod.svc.cluster.local
 ## 🔍 4. Verification & Inspection Commands
 
 ### Check Pod & Service Status
+
 ```powershell
 # List all running pods
 kubectl get pods
@@ -118,6 +133,7 @@ kubectl get endpoints web-service
 ```
 
 ### Check ConfigMap Content & Environment Variables
+
 ```powershell
 kubectl get configmaps
 kubectl get configmap webserver-configmap -o yaml
@@ -130,6 +146,7 @@ kubectl logs deployment/webserver-deployment --tail=5
 ```
 
 ### Live Log Streaming
+
 ```powershell
 # Stream logs live from a deployment
 kubectl logs -f deployment/webserver-deployment
@@ -151,6 +168,7 @@ kubectl logs -f -l app=webserver --all-containers
 ## ⚙️ 5. ReplicaSet Architecture & Rollout Management
 
 ### Architecture Hierarchy
+
 ```text
 Deployment (webserver-deployment)
    └── ReplicaSet (webserver-deployment-7c8f765b79) [Revision 3]
@@ -162,6 +180,7 @@ Deployment (webserver-deployment)
 ```
 
 ### Understanding ReplicaSets (`kubectl get replicaset`)
+
 * Every time `deployment.yaml` spec is modified or a rollout restart is triggered, Kubernetes creates a **new ReplicaSet**.
 * The **pod name** contains the hash identifier of its parent ReplicaSet:
   * Pod: `webserver-deployment-7c8f765b79-dcf5p` $\rightarrow$ ReplicaSet: `webserver-deployment-7c8f765b79`
@@ -190,6 +209,7 @@ kubectl rollout undo deployment webserver-deployment --to-revision=1
 ```
 
 ### Rollback Revision Mechanics
+
 * When you run `kubectl rollout undo`, Kubernetes promotes the target historical ReplicaSet back to active status (`DESIRED: 5`) and sets the current ReplicaSet to `DESIRED: 0`.
 * The newly promoted ReplicaSet receives a **new Revision Number** (e.g., rolling back from Revision 3 to Revision 2 creates Revision 4, consuming Revision 2).
 
@@ -198,17 +218,23 @@ kubectl rollout undo deployment webserver-deployment --to-revision=1
 ## 🌐 6. Accessing the Application
 
 ### Access from Host Browser (NodePort)
+
 Open browser directly at:
+
 ```text
 http://localhost:32008
 ```
+
 Or test via host PowerShell:
+
 ```powershell
 curl http://localhost:32008
 ```
 
 ### In-Cluster Verification using `curlpod`
+
 Execute `curl` commands directly inside the cluster overlay network:
+
 ```powershell
 # Test service by DNS name
 kubectl exec curlpod -- curl -s http://web-service
@@ -218,10 +244,12 @@ kubectl exec curlpod -- curl -s http://10.104.21.173
 ```
 
 ### Alternative: Access via `kubectl port-forward`
+
 ```powershell
 # Forward local host port 8888 to service port 80
 kubectl port-forward svc/web-service 8888:80
 ```
+
 Access at `http://localhost:8888`
 
 ---
@@ -229,7 +257,9 @@ Access at `http://localhost:8888`
 ## 🧪 7. Self-Healing & Scaling Experiments
 
 ### Self-Healing Test
+
 Delete a running pod to observe Kubernetes automatically creating a replacement:
+
 ```powershell
 # Delete a specific pod
 kubectl delete pod <pod-name>
@@ -239,6 +269,7 @@ kubectl get pods
 ```
 
 ### Dynamic Replica Scaling
+
 ```powershell
 # Scale deployment down to 3 replicas
 kubectl scale deployment webserver-deployment --replicas=3
@@ -252,11 +283,13 @@ kubectl scale deployment webserver-deployment --replicas=5
 ## 🎯 9. Essential DevOps & Kubernetes Interview Q&A
 
 ### Q1: What is the difference between `LivenessProbe`, `ReadinessProbe`, and `StartupProbe`?
+
 * **`LivenessProbe`**: Checks if container is alive. If it fails $\rightarrow$ Kubernetes kills and restarts container.
 * **`ReadinessProbe`**: Checks if container is ready to handle traffic. If it fails $\rightarrow$ Kubernetes removes pod IP from Service Endpoints (stops routing traffic to it) without restarting it.
 * **`StartupProbe`**: Protects slow-starting applications during startup by disabling liveness/readiness probes until the app initializes.
 
 ### Q2: What is the difference between `Deployment`, `StatefulSet`, and `DaemonSet`?
+
 * **`Deployment`**: Best for **stateless** apps (Nginx). Manages Pod revisions via **`ReplicaSet`** objects.
 * **`StatefulSet`**: Best for **stateful** databases (PostgreSQL, Kafka). Pods have sticky identities (`pod-0`) and manage revisions via **`ControllerRevision`** (`controllerrevisions.apps`) objects instead of ReplicaSets.
 * **`DaemonSet`**: Runs 1 pod copy on **every node** (logging/monitoring agents), also using **`ControllerRevision`**.
@@ -268,16 +301,19 @@ kubectl get controllerrevisions -o yaml
 ```
 
 ### Q3: What is the difference between `Resource Requests` and `Resource Limits`?
+
 * **`Requests`**: Minimum CPU/RAM guaranteed and reserved for pod scheduling.
 * **`Limits`**: Hard ceiling for CPU/RAM usage.
   * Exceeding RAM limit $\rightarrow$ **`OOMKilled`** (Exit Code 137, container killed).
   * Exceeding CPU limit $\rightarrow$ **CPU Throttled** (container slowed down, not killed).
 
 ### Q4: How do `ConfigMaps` differ from `Secrets`?
+
 * **`ConfigMap`**: Plaintext non-sensitive configuration data (`APP_ENV`, `nginx.conf`).
 * **`Secret`**: Confidential data (passwords, API tokens, TLS keys). Stored as Base64 encoded strings in YAML (or encrypted at rest via KMS/Vault).
 
 ### Q5: What is the difference between `Service` types and `Ingress`?
+
 * **`ClusterIP`**: Internal virtual IP only reachable inside cluster.
 * **`NodePort`**: Exposes service on a static host port (30000-32767) across all nodes (Cluster-Wide).
 * **`LoadBalancer`**: Provisions an external Cloud Load Balancer (AWS ELB / GCP LB).
