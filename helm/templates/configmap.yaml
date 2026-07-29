@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "webserver.fullname" . }}-configmap
+  labels:
+    {{- include "webserver.labels" . | nindent 4 }}
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Hello Kubernetes (Helm)</title>
+      <style>
+        .tray { display: inline-block; background-color: LightCoral; color: white; padding: 10px; border-radius: 5px; }
+      </style>
+    </head>
+    <body>
+      <center>
+        <h1 class="tray">Hello, Kubers from Helm! ☸️</h1>
+        <p>Environment: <strong>$APP_ENV</strong></p>
+        <p>Max Connections: <strong>$MAX_CONNECTIONS</strong></p>
+      </center>
+    </body>
+    </html>
+
+  docs.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Documentation Page (Helm)</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #eef2f3; color: #333; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>Documentation Page 📚</h1>
+        <p>Welcome to the <strong>$APP_ENV</strong> environment system documentation!</p>
+        <p>Max active connections allowed: <strong>$MAX_CONNECTIONS</strong></p>
+      </div>
+    </body>
+    </html>
+
+  APP_ENV: {{ .Values.config.appEnv | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  MAX_CONNECTIONS: {{ .Values.config.maxConnections | quote }}
+  FEATURE_TOGGLE_NEW_UI: {{ .Values.config.featureToggleNewUi | quote }}

@@ -1,0 +1,50 @@
+replicaCount: 5
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 80
+  nodePort: 32008
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "webserver.local"
+  paths:
+    - path: /
+      pathType: Prefix
+    - path: /docs
+      pathType: Exact
+
+config:
+  appEnv: "production"
+  logLevel: "info"
+  maxConnections: "100"
+  featureToggleNewUi: "true"
+
+secret:
+  dbPasswordBase64: "c3VwZXJzZWNyZXQ=" # supersecret
+  apiKeyBase64: "MTIzNDUtYWJjZGU="     # 12345-abcde
+
+resources:
+  requests:
+    memory: "150Mi"
+  limits:
+    memory: "300Mi"
+
+probes:
+  startup:
+    initialDelaySeconds: 2
+    periodSeconds: 5
+    failureThreshold: 30
+  liveness:
+    initialDelaySeconds: 3
+    periodSeconds: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "webserver.fullname" . }}-deployment
+  labels:
+    {{- include "webserver.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "webserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "webserver.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["sh", "-c", "envsubst '$APP_ENV $MAX_CONNECTIONS' < /tmp/template/index.html > /usr/share/nginx/html/index.html && envsubst '$APP_ENV $MAX_CONNECTIONS' < /tmp/template/docs.html > /usr/share/nginx/html/docs.html && nginx -g 'daemon off;'"]
+        ports:
+        - containerPort: 80
+        env:
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "webserver.fullname" . }}-configmap
+              key: APP_ENV
+        - name: MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "webserver.fullname" . }}-configmap
+              key: MAX_CONNECTIONS
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "webserver.fullname" . }}-secret
+              key: DB_PASSWORD
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
+          periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+          failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+        volumeMounts:
+        - name: nginx-index-file
+          mountPath: "/tmp/template/"
+      volumes:
+      - name: nginx-index-file
+        configMap:
+          name: {{ include "webserver.fullname" . }}-configmap
+          items:
+          - key: index.html
+            path: index.html
+          - key: docs.html
+            path: docs.html

@@ -17,6 +17,7 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 | [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml) | `Ingress` | Layer 7 HTTP router for root path (`/`) |
 | [`ingress-docs.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress-docs.yaml) | `Ingress` | Dedicated Layer 7 Ingress rewriting `/docs` to `/docs.html` |
 | [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml)                   | `Pod`        | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing                        |
+| [`helm/cheatsheet.md`](file:///h:/code/yl/DevOps-labs/helm/cheatsheet.md)                   | `Helm`       | Complete Helm package chart & commands guide |
 
 ---
 
@@ -324,19 +325,18 @@ kubectl get controllerrevisions -o yaml
 
 ## 🧹 10. Full Teardown & Cleanup
 
-Remove all resources created during this lab session:
+Remove all resources created during this lab session in one go:
 
 ```powershell
+# One-Go PowerShell Cleanup Script
+.\cleanup.ps1
+```
+
+Or execute manually:
+```powershell
 # Delete default namespace resources
-kubectl delete -f deployment.yaml
-kubectl delete -f service_nodeport.yaml
-kubectl delete -f service.yaml
-kubectl delete -f ingress.yaml
-kubectl delete -f ingress-docs.yaml
-kubectl delete -f secret.yaml
-kubectl delete -f configmap.yaml
-kubectl delete -f curlpod.yaml
+kubectl delete -f deployment.yaml,service_nodeport.yaml,service.yaml,ingress.yaml,ingress-docs.yaml,secret.yaml,configmap.yaml,curlpod.yaml --ignore-not-found=true
 
 # Delete prod namespace and all its resources
-kubectl delete -f namespace.yaml
+kubectl delete -f namespace.yaml --ignore-not-found=true
 ```
