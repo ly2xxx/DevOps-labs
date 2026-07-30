@@ -1,0 +1,50 @@
+# Environment-specific overrides for Production (PROD)
+replicaCount: 3
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: "1.25.0"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "webserver.local"
+  paths:
+    - path: /
+      pathType: Prefix
+    - path: /docs
+      pathType: Exact
+
+config:
+  appEnv: "production"
+  logLevel: "warn"
+  maxConnections: "500"
+  featureToggleNewUi: "false"
+
+secret:
+  dbPasswordBase64: "cHJvZF9zZWN1cmVfcGFzc3dvcmQ=" # prod_secure_password
+  apiKeyBase64: "cHJvZC1saXZlLWFwaS1rZXk="        # prod-live-api-key
+
+resources:
+  requests:
+    memory: "256Mi"
+  limits:
+    memory: "512Mi"
+
+probes:
+  startup:
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    failureThreshold: 30
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5

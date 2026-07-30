@@ -1,6 +1,6 @@
 # Helm Hands-On Cheat Sheet
 
-A complete guide to packaging, configuring, and managing our Nginx Webserver application using Helm.
+A complete guide to packaging, configuring, and managing our Nginx Webserver application using Helm across multi-environment setups.
 
 ---
 
@@ -9,7 +9,9 @@ A complete guide to packaging, configuring, and managing our Nginx Webserver app
 ```text
 helm/
 ├── Chart.yaml             # Chart metadata (name, version, appVersion)
-├── values.yaml            # Configurable parameters & default values
+├── values.yaml            # Base default configuration
+├── values-dev.yaml        # Development environment overrides
+├── values-prod.yaml       # Production environment overrides
 ├── cheatsheet.md          # Helm commands & walkthrough guide
 └── templates/             # Kubernetes template manifests
     ├── _helpers.tpl       # Named template helper functions
@@ -23,53 +25,84 @@ helm/
 
 ---
 
-## 🚀 2. Essential Helm Commands Reference
+## 🌍 2. Multi-Environment Release Workflow (Dev vs Prod)
 
-### 1. Template Rendering & Dry-Run (Validation)
-Test template rendering locally without contacting the Kubernetes cluster:
+### 1. Rendering & Validating Environments Locally
+
 ```powershell
-# Render local templates to stdout to inspect generated YAML
-helm template my-webserver ./helm
+# Render DEV environment manifests
+helm template webserver-dev ./helm -f ./helm/values-dev.yaml -n dev
 
-# Perform a dry-run installation against the live cluster
-helm install my-webserver ./helm --dry-run
+# Render PROD environment manifests
+helm template webserver-prod ./helm -f ./helm/values-prod.yaml -n prod
 ```
 
-### 2. Installing the Release
-```powershell
-# Install in default namespace
-helm install my-webserver ./helm
+### 2. Installing Environment Releases
 
-# Install in prod namespace with custom replica count & overrides
-helm install my-webserver ./helm -n prod --create-namespace --set replicaCount=3
+```powershell
+# Install DEV release into dev namespace
+helm install webserver-dev ./helm -f ./helm/values-dev.yaml -n dev --create-namespace
+
+# Install PROD release into prod namespace
+helm install webserver-prod ./helm -f ./helm/values-prod.yaml -n prod --create-namespace
 ```
 
-### 3. Upgrading Releases
-```powershell
-# Upgrade release after modifying values.yaml
-helm upgrade my-webserver ./helm
+### 3. Upgrading Environment Releases
 
-# Upgrade with inline value overrides
-helm upgrade my-webserver ./helm --set config.appEnv=staging --set service.nodePort=32009
+```powershell
+# Upgrade DEV with a custom image tag build
+helm upgrade webserver-dev ./helm -f ./helm/values-dev.yaml -n dev --set image.tag=1.25.0-alpine
+
+# Upgrade PROD environment safely
+helm upgrade webserver-prod ./helm -f ./helm/values-prod.yaml -n prod
 ```
 
-### 4. Release History & Rollbacks
+---
+
+## 🚀 3. Essential Helm Commands Reference
+
+### 1. Dry-Run (Validation)
+
 ```powershell
-# List all active Helm releases
+# Perform a dry-run installation against the live cluster for Prod
+helm install webserver-prod ./helm -f ./helm/values-prod.yaml -n prod --dry-run=client
+```
+
+### 2. Inspection & Application Logs
+
+```powershell
+# Check Helm release status
+helm status webserver-dev -n dev
+
+# View application container logs (by label)
+kubectl logs -n dev -l app=webserver-dev-webserver-chart
+
+# Stream application container logs live
+kubectl logs -f -n dev -l app=webserver-dev-webserver-chart
+
+# Inspect deployment events & failures
+kubectl describe deployment webserver-dev-webserver-chart-deployment -n dev
+```
+
+### 3. Release History & Rollbacks
+
+```powershell
+# List all active Helm releases across all namespaces
 helm list -A
 
-# View revision history of a release
-helm history my-webserver
+# View revision history of the prod release
+helm history webserver-prod -n prod
 
-# Roll back to revision 1 instantly
-helm rollback my-webserver 1
+# Roll back prod to revision 1 instantly
+helm rollback webserver-prod 1 -n prod
 ```
 
-### 5. Uninstall & Cleanup
-```powershell
-# Uninstall release and delete all associated Kubernetes resources
-helm uninstall my-webserver
+### 4. Uninstall & Cleanup
 
-# Uninstall release from prod namespace
-helm uninstall my-webserver -n prod
+```powershell
+# Uninstall DEV release
+helm uninstall webserver-dev -n dev
+
+# Uninstall PROD release
+helm uninstall webserver-prod -n prod
 ```

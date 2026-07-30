@@ -1,0 +1,51 @@
+# Environment-specific overrides for Development (DEV)
+replicaCount: 1
+
+image:
+  repository: nginx
+  pullPolicy: Always
+  tag: "1.25.0-alpine"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 80
+  nodePort: 32001
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "dev.webserver.local"
+  paths:
+    - path: /
+      pathType: Prefix
+    - path: /docs
+      pathType: Exact
+
+config:
+  appEnv: "development"
+  logLevel: "debug"
+  maxConnections: "20"
+  featureToggleNewUi: "true"
+
+secret:
+  dbPasswordBase64: "ZGV2X3Bhc3N3b3Jk" # dev_password
+  apiKeyBase64: "ZGV2LWFwaS1rZXk="     # dev-api-key
+
+resources:
+  requests:
+    memory: "64Mi"
+  limits:
+    memory: "128Mi"
+
+probes:
+  startup:
+    initialDelaySeconds: 1
+    periodSeconds: 3
+    failureThreshold: 10
+  liveness:
+    initialDelaySeconds: 2
+    periodSeconds: 5
+  readiness:
+    initialDelaySeconds: 2
+    periodSeconds: 5

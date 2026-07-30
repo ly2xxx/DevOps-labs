@@ -14,10 +14,10 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 | [`deployment.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/deployment.yaml)             | `Deployment` | Manages 5 Nginx pods with resource limits, probes (startup, liveness, readiness), and volume mounts |
 | [`service.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service.yaml)                   | `Service`    | Exposes Nginx pods internally via ClusterIP on port 80                                              |
 | [`service_nodeport.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/service_nodeport.yaml) | `Service`    | Exposes Nginx pods externally on host node port 32008 using NodePort                                |
-| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml) | `Ingress` | Layer 7 HTTP router for root path (`/`) |
-| [`ingress-docs.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress-docs.yaml) | `Ingress` | Dedicated Layer 7 Ingress rewriting `/docs` to `/docs.html` |
+| [`ingress.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress.yaml)                   | `Ingress`    | Layer 7 HTTP router for root path (`/`)                                                           |
+| [`ingress-docs.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/ingress-docs.yaml)         | `Ingress`    | Dedicated Layer 7 Ingress rewriting`/docs` to `/docs.html`                                      |
 | [`curlpod.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/curlpod.yaml)                   | `Pod`        | Lightweight utility pod (`curlimages/curl`) for in-cluster network testing                        |
-| [`helm/cheatsheet.md`](file:///h:/code/yl/DevOps-labs/helm/cheatsheet.md)                   | `Helm`       | Complete Helm package chart & commands guide |
+| [`helm/cheatsheet.md`](file:///h:/code/yl/DevOps-labs/helm/cheatsheet.md)                  | `Helm`       | Complete Helm package chart & commands guide                                                        |
 
 ---
 
@@ -333,6 +333,7 @@ Remove all resources created during this lab session in one go:
 ```
 
 Or execute manually:
+
 ```powershell
 # Delete default namespace resources
 kubectl delete -f deployment.yaml,service_nodeport.yaml,service.yaml,ingress.yaml,ingress-docs.yaml,secret.yaml,configmap.yaml,curlpod.yaml --ignore-not-found=true
