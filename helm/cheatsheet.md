@@ -55,6 +55,8 @@ helm upgrade webserver-dev ./helm -f ./helm/values-dev.yaml -n dev --set image.t
 
 # Upgrade PROD environment safely
 helm upgrade webserver-prod ./helm -f ./helm/values-prod.yaml -n prod
+
+helm upgrade --install <release> ./chart -f values-<env>.yaml --set image.tag=$CI_COMMIT_SHA
 ```
 
 ---
