@@ -79,7 +79,7 @@ kubectl apply -f k8s/ -n <namespace>
 
 # Verify deployment status
 kubectl get pods -n <namespace>
-kubectl rollout status deployment/wiz-scan-service -n <namespace>
+kubectl rollout status deployment/<metadata.name> -n <namespace>
 
 ```
 
