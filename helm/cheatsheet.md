@@ -108,3 +108,9 @@ helm uninstall webserver-dev -n dev
 # Uninstall PROD release
 helm uninstall webserver-prod -n prod
 ```
+
+Using Helm over raw manifests adds three primary operational benefits:
+
+- Environment Parameterization (DRY Configuration): Instead of duplicating whole folders of YAML for Dev, Staging, and Prod, you reuse one set of templates and inject different environment configs (values-dev.yaml, values-prod.yaml) for replicas, resource sizing, and domain names.
+- Release Versioning & Instant Rollbacks: Helm tracks your deployments as versioned releases with release metadata. If a bad release breaks production, you can atomically roll back with a single command (helm rollback wiz-scan-service <revision>).
+- Automated CI/CD Integration: In pipelines, you can dynamically override specific parameters on the fly during deployment without modifying YAML files directly:
