@@ -5,7 +5,7 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 ---
 
 ## 📁 1. Project Files Overview
-
+```text
 k8s/
 ├── deployment.yaml       # Pod spec, container image, replicas, resource limits, health probes
 ├── service.yaml          # Internal networking (ClusterIP) or LoadBalancer to expose the REST API
@@ -13,7 +13,7 @@ k8s/
 ├── secret.yaml           # Sensitive credentials (e.g., Wiz API client ID/secret, auth tokens)
 ├── ingress.yaml          # (Optional) ALB/Ingress rules for external HTTP(S) routing
 └── serviceaccount.yaml   # (Optional) ServiceAccount with IRSA annotations for AWS IAM permissions (e.g., S3 access)
-
+```
 | File                                                                                        | Resource Type  | Description                                                                                         |
 | :------------------------------------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------------- |
 | [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml)               | `Namespace`  | Defines the isolated`prod` (production) namespace boundary                                        |
