@@ -71,6 +71,19 @@ Ensures all pod replicas restart and pick up the latest mounted ConfigMap files:
 kubectl rollout restart deployment webserver-deployment
 ```
 
+### Step 6: Apply raw Kubernetes YAML manifests
+
+```powershell
+# Apply ConfigMaps, Secrets, Deployment, and Service
+kubectl apply -f k8s/ -n <namespace>
+
+# Verify deployment status
+kubectl get pods -n <namespace>
+kubectl rollout status deployment/wiz-scan-service -n <namespace>
+
+```
+
+
 ---
 
 ## 🏢 3. Production Namespace (`prod`) Setup
