@@ -35,11 +35,14 @@ winget install Kubernetes.kubectl
 winget install Helm.Helm
 ```
 
+> [!NOTE]
+> **Hardware Allocation:** Rancher and the k3s control plane require at least 6–8 GB of RAM allocated to WSL2 (`%USERPROFILE%\.wslconfig`). If RAM is restricted below 6 GB, Rancher server pods may encounter `OOMKilled` crashes during startup.
+
 ---
 
 ## 1. Create the k3d cluster
 
-Expose ports 80 and 443 so the Rancher UI is reachable at `https://rancher.localhost` later.
+Expose ports 80 and 443 so the Rancher UI is reachable at `https://rancher.localhost` later. (Ensure port arguments remain quoted so PowerShell does not interpret `@` as splatting).
 
 ```powershell
 k3d cluster create rancher-cluster `
@@ -68,13 +71,13 @@ Rancher needs it for TLS cert management.
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 ```
 
-Wait for it to come up:
+Wait explicitly for all 3 cert-manager deployments (especially the mutating webhook) to become fully available before continuing:
 
 ```powershell
-kubectl -n cert-manager get pods --watch
+kubectl -n cert-manager rollout status deploy/cert-manager
+kubectl -n cert-manager rollout status deploy/cert-manager-cainjector
+kubectl -n cert-manager rollout status deploy/cert-manager-webhook
 ```
-
-All pods should be `Running` before continuing.
 
 ---
 
@@ -88,9 +91,9 @@ kubectl create namespace cattle-system
 
 helm install rancher rancher-latest/rancher `
   --namespace cattle-system `
-  --set hostname=rancher.localhost `
-  --set bootstrapPassword=admin `
-  --set replicas=1
+  --set "hostname=rancher.localhost" `
+  --set "bootstrapPassword=admin" `
+  --set "replicas=1"
 ```
 
 Watch the rollout (this takes a few minutes):
@@ -125,14 +128,17 @@ k3d cluster delete rancher-cluster
 ## Troubleshooting
 
 **"rancher.localhost" doesn't resolve:**
-Make sure Docker Desktop's WSL integration is on. Test with `curl -k https://rancher.localhost`.
+While modern browsers and `curl` usually resolve `*.localhost` automatically, Windows network stacks or local DNS settings can sometimes fail to resolve it properly.
+1. Open `C:\Windows\System32\drivers\etc\hosts` as Administrator.
+2. Add the line: `127.0.0.1 rancher.localhost`
+3. Verify with `curl -k https://rancher.localhost`.
 
 **Pods stuck in `CrashLoopBackOff` in cattle-system:**
-Check logs — usually means cert-manager wasn't ready when Rancher started. Delete the rancher Helm release, wait 60s for cert-manager, then reinstall:
+Check logs — usually means cert-manager's mutating webhook was not fully ready when Rancher started. Delete the rancher Helm release, wait for webhook rollout, then reinstall:
 ```powershell
 helm uninstall rancher -n cattle-system
-# wait
-helm install rancher rancher-latest/rancher --namespace cattle-system --set hostname=rancher.localhost --set bootstrapPassword=admin --set replicas=1
+kubectl -n cert-manager rollout status deploy/cert-manager-webhook
+helm install rancher rancher-latest/rancher --namespace cattle-system --set "hostname=rancher.localhost" --set "bootstrapPassword=admin" --set "replicas=1"
 ```
 
 **Port 80/443 already in use:**
