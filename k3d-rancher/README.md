@@ -1,0 +1,157 @@
+# k3d + Rancher Lab
+
+Run a local Kubernetes cluster (k3d) inside Docker Desktop, then install the Rancher Manager UI on top of it via Helm.
+
+**Stack:**
+- Docker Desktop (with WSL2 on Windows)
+- k3d (k3s-in-Docker)
+- kubectl
+- Helm 3
+
+---
+
+## 0. Prerequisites
+
+Verify each is installed and reachable from PowerShell:
+
+```powershell
+docker version         # Docker Desktop running
+wsl --status           # WSL2 default distro installed
+kubectl version --client
+k3d version
+helm version
+```
+
+If any are missing:
+
+```powershell
+# k3d
+winget install k3d
+
+# kubectl (if not already present)
+winget install Kubernetes.kubectl
+
+# Helm
+winget install Helm.Helm
+```
+
+---
+
+## 1. Create the k3d cluster
+
+Expose ports 80 and 443 so the Rancher UI is reachable at `https://rancher.localhost` later.
+
+```powershell
+k3d cluster create rancher-cluster `
+  --api-port 6550 `
+  -p "80:80@loadbalancer" `
+  -p "443:443@loadbalancer" `
+  --agents 1
+```
+
+Verify:
+
+```powershell
+kubectl get nodes
+kubectl get pods -A
+```
+
+You should see 1 server + 1 agent, all `Ready`.
+
+---
+
+## 2. Install cert-manager
+
+Rancher needs it for TLS cert management.
+
+```powershell
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+```
+
+Wait for it to come up:
+
+```powershell
+kubectl -n cert-manager get pods --watch
+```
+
+All pods should be `Running` before continuing.
+
+---
+
+## 3. Install Rancher via Helm
+
+```powershell
+helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
+helm repo update
+
+kubectl create namespace cattle-system
+
+helm install rancher rancher-latest/rancher `
+  --namespace cattle-system `
+  --set hostname=rancher.localhost `
+  --set bootstrapPassword=admin `
+  --set replicas=1
+```
+
+Watch the rollout (this takes a few minutes):
+
+```powershell
+kubectl -n cattle-system rollout status deploy/rancher
+```
+
+---
+
+## 4. Open the dashboard
+
+Browse to: **https://rancher.localhost**
+
+- Accept the self-signed cert warning (it's a local Rancher cert-manager cert).
+- Username: `admin`
+- Password: `admin` (the bootstrap password set above)
+- On first login, Rancher forces a password change — set something memorable.
+
+You should land on the Rancher **Cluster Management** dashboard, with your local `rancher-cluster` visible as an imported cluster.
+
+---
+
+## 5. Tear down
+
+```powershell
+k3d cluster delete rancher-cluster
+```
+
+---
+
+## Troubleshooting
+
+**"rancher.localhost" doesn't resolve:**
+Make sure Docker Desktop's WSL integration is on. Test with `curl -k https://rancher.localhost`.
+
+**Pods stuck in `CrashLoopBackOff` in cattle-system:**
+Check logs — usually means cert-manager wasn't ready when Rancher started. Delete the rancher Helm release, wait 60s for cert-manager, then reinstall:
+```powershell
+helm uninstall rancher -n cattle-system
+# wait
+helm install rancher rancher-latest/rancher --namespace cattle-system --set hostname=rancher.localhost --set bootstrapPassword=admin --set replicas=1
+```
+
+**Port 80/443 already in use:**
+Check `netstat -ano | findstr ":80 "` — common culprit is WSL2 services. Either stop them, or change the host-side port mapping in step 1:
+```powershell
+-p "8080:80@loadbalancer" -p "8443:443@loadbalancer"
+```
+Then access via `https://localhost:8443` and update `--set hostname=localhost`.
+
+**Kubectl context wrong:**
+```powershell
+kubectl config get-contexts
+kubectl config use-context k3d-rancher-cluster
+```
+
+---
+
+## Optional next steps
+
+- Import an existing local cluster (e.g. kind/minikube) into Rancher via *Cluster Management → Import Existing*
+- Deploy a small workload (nginx, whoami) and expose it via Rancher's *Service Discovery*
+- Add a second k3d cluster and manage it from the same Rancher instance
