@@ -174,7 +174,14 @@ You should land on the Rancher **Cluster Management** dashboard, with your local
 
 ---
 
-## 5. Tear down
+## 5. Reboot
+
+```powershell
+k3d cluster stop rancher-cluster
+k3d cluster start rancher-cluster
+```
+
+## 6. Tear down
 
 ```powershell
 k3d cluster delete rancher-cluster
