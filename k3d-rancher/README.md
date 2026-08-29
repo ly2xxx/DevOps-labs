@@ -63,7 +63,15 @@ kubectl get nodes
 kubectl get pods -A
 ```
 
-You should see 1 server + 1 agent, all `Ready`.
+You should see 1 server + 1 agent, all `Ready`. If not
+
+Manual reboot:
+
+```powershell
+k3d cluster stop rancher-cluster
+k3d cluster start rancher-cluster
+kubectl get nodes
+```
 
 ---
 
