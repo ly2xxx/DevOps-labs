@@ -218,6 +218,70 @@ kubectl config get-contexts
 kubectl config use-context k3d-rancher-cluster
 ```
 
+### Removing the `:8443` port from the Rancher URL
+
+If you created the cluster with the alternative port mapping
+(`-p "8081:80@loadbalancer" -p "8443:443@loadbalancer"`) because ports 80/443
+were already taken, Rancher lives at `https://rancher.localhost:8443`.
+
+To move it to the standard `https://rancher.localhost`, you must free port 443
+on the host **first**. Editing the `server-url` setting on its own will break
+the UI and Fleet agent registration, because Rancher will start advertising an
+address nothing is listening on.
+
+**1. Free ports 80 and 443.** Find what holds them:
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}"
+netstat -ano | findstr ":443 "
+```
+
+For example: A self-hosted GitLab container is the usual culprit, since it publishes 22, 80
+and 443. Stop it:
+
+```powershell
+docker stop <gitlab-container-name>
+```
+
+**2. Add the port mappings to the running cluster.** No need to rebuild —
+`k3d cluster edit` recreates only the loadbalancer container and leaves the
+cluster and its workloads intact:
+
+```powershell
+k3d cluster edit rancher-cluster --port-add "80:80@loadbalancer" --port-add "443:443@loadbalancer"
+```
+
+Verify the new mapping is live:
+
+```powershell
+docker ps --filter "name=serverlb" --format "{{.Names}}`t{{.Ports}}"
+```
+
+You should see `0.0.0.0:443->443/tcp`. Note that `k3d cluster edit` is marked
+**experimental** and only adds ports — there is no `--port-remove`, so the
+original 8081/8443 mappings remain. That is harmless; both URLs will work.
+
+**3. Update the Rancher server URL.** In the UI go to
+☰ → **Global Settings** → **Settings** → `server-url` and change it to:
+
+```
+https://rancher.localhost
+```
+
+Save and reload. Confirm the new URL works before closing the tab — if
+anything goes wrong, `https://rancher.localhost:8443` still resolves and gives
+you a way back in.
+
+**Fallback.** If `k3d cluster edit` fails, delete and recreate the cluster with
+`-p "80:80@loadbalancer" -p "443:443@loadbalancer"`. This wipes the cluster, so
+cert-manager and Rancher must be reinstalled.
+
+**Note on coexistence.** GitLab and this cluster cannot both hold ports 80/443.
+Stopping GitLab before `k3d cluster start` is fine as a routine. If you would
+rather run both at once, remap GitLab to non-standard host ports (e.g. `8929:80`,
+`8930:443`) and set `external_url 'http://localhost:8929'` in its config so its
+generated links stay correct.
+
 ---
 
 ## Optional next steps
