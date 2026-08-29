@@ -8,6 +8,13 @@ Run a local Kubernetes cluster (k3d) inside Docker Desktop, then install the Ran
 - kubectl
 - Helm 3
 
+Windows
+└── Docker Desktop (WSL2 VM)
+    └── containers: server-0, agent-0, serverlb
+        └── k3s process
+            └── Kubernetes cluster
+                └── pods — including Rancher
+
 ---
 
 ## 0. Prerequisites
