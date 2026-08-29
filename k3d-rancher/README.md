@@ -50,11 +50,15 @@ k3d cluster create rancher-cluster `
   -p "80:80@loadbalancer" `
   -p "443:443@loadbalancer" `
   --agents 1
+
+# merge context
+k3d kubeconfig merge rancher-cluster --kubeconfig-merge-default --kubeconfig-switch-context
 ```
 
 Verify:
 
 ```powershell
+kubectl config get-contexts
 kubectl get nodes
 kubectl get pods -A
 ```
