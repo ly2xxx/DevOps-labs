@@ -9,13 +9,44 @@ Run a local Kubernetes cluster (k3d) inside Docker Desktop, then install the Ran
 - Helm 3
 
 Windows
+
 └── Docker Desktop (WSL2 VM)
+
     └── containers: server-0, agent-0, serverlb
+    
         └── k3s process
+
             └── Kubernetes cluster
+            
                 └── pods — including Rancher
 
 ---
+
+```mermaid
+flowchart TD
+    k3d(["k3d CLI<br/>host tool, one-time"])
+    browser(["Browser<br/>https://rancher.localhost:8443"])
+
+    subgraph windows["Windows"]
+        subgraph docker["Docker Desktop (WSL2 VM)"]
+            subgraph containers["Containers"]
+                lb["serverlb<br/>nginx proxy"]
+                subgraph k3s["server-0 + agent-0 — k3s process"]
+                    subgraph cluster["Kubernetes cluster"]
+                        api["Kubernetes API server"]
+                        rancher["Rancher pods<br/>cattle-system"]
+                        addons["Traefik · CoreDNS · cert-manager"]
+                    end
+                end
+            end
+        end
+    end
+
+    k3d -.->|creates| containers
+    browser -->|":8443"| lb
+    lb --> rancher
+    rancher -->|manages| api
+```
 
 ## 0. Prerequisites
 
