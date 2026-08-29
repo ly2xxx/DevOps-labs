@@ -73,6 +73,19 @@ k3d cluster start rancher-cluster
 kubectl get nodes
 ```
 
+If still not working
+
+Install fixed version:
+
+```powershell
+k3d cluster delete rancher-cluster
+k3d cluster create rancher-cluster `
+  --image rancher/k3s:v1.32.5-k3s1 `
+  --api-port 6550 `
+  -p "80:80@loadbalancer" `
+  -p "443:443@loadbalancer" `
+  --agents 1
+```
 ---
 
 ## 2. Install cert-manager
