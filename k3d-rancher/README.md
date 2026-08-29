@@ -99,11 +99,8 @@ DON'T USE KUBECTL, USE HELM INSTEAD
 ```powershell
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 kubectl delete -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
-```
 
-Wait explicitly for all 3 cert-manager deployments (especially the mutating webhook) to become fully available before continuing:
-
-```powershell
+# Wait explicitly for all 3 cert-manager deployments (especially the mutating webhook) to become fully available before continuing:
 kubectl -n cert-manager rollout status deploy/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-cainjector
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook
