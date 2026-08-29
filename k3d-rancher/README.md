@@ -75,17 +75,20 @@ kubectl get nodes
 
 If still not working
 
-Install fixed version:
+Install fixed version and fixed ports:
 
 ```powershell
 k3d cluster delete rancher-cluster
 k3d cluster create rancher-cluster `
   --image rancher/k3s:v1.32.5-k3s1 `
   --api-port 6550 `
-  -p "80:80@loadbalancer" `
-  -p "443:443@loadbalancer" `
+  -p "8081:80@loadbalancer" `
+  -p "8443:443@loadbalancer" `
   --agents 1
 ```
+
+Rancher UI then at https://rancher.localhost:8443. Keep --set hostname=rancher.localhost in the Helm install unchanged — only the browser URL carries the port.
+
 ---
 
 ## 2. Install cert-manager
