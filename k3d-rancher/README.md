@@ -105,7 +105,7 @@ kubectl -n cert-manager rollout status deploy/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-cainjector
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook
 ```
-USE HELM INSTEAD FOR VERSION CONTROL
+USE HELM INSTEAD FOR VERSION CONTROL - https://artifacthub.io/packages/helm/cert-manager/cert-manager
 ```powershell
 # All three should come back empty
 kubectl get ns cert-manager
