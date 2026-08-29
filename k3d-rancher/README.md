@@ -126,6 +126,16 @@ helm status cert-manager -n cert-manager
 helm list -n cert-manager
 
 ```
+
+FYI - check remote chart
+```powershell
+helm show chart jetstack/cert-manager --version v1.21.1     # metadata
+helm show values jetstack/cert-manager --version v1.21.1    # every configurable value
+helm show readme jetstack/cert-manager --version v1.21.1
+helm show all jetstack/cert-manager --version v1.21.1
+# Download
+helm pull jetstack/cert-manager --version v1.21.1 --untar
+```
 ---
 
 ## 3. Install Rancher via Helm
@@ -153,7 +163,7 @@ kubectl -n cattle-system rollout status deploy/rancher
 
 ## 4. Open the dashboard
 
-Browse to: **https://rancher.localhost**
+Browse to: **https://rancher.localhost:8443/**
 
 - Accept the self-signed cert warning (it's a local Rancher cert-manager cert).
 - Username: `admin`
