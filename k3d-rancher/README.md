@@ -122,6 +122,9 @@ helm install cert-manager jetstack/cert-manager `
 
 # Check rollout status
 kubectl -n cert-manager rollout status deploy/cert-manager
+helm status cert-manager -n cert-manager
+helm list -n cert-manager
+
 ```
 ---
 
