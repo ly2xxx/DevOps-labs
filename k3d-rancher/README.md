@@ -95,8 +95,10 @@ Rancher UI then at https://rancher.localhost:8443. Keep --set hostname=rancher.l
 
 Rancher needs it for TLS cert management.
 
+DON'T USE KUBECTL, USE HELM INSTEAD
 ```powershell
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+kubectl delete -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 ```
 
 Wait explicitly for all 3 cert-manager deployments (especially the mutating webhook) to become fully available before continuing:
