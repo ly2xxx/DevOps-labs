@@ -95,7 +95,7 @@ Rancher UI then at https://rancher.localhost:8443. Keep --set hostname=rancher.l
 
 Rancher needs it for TLS cert management.
 
-DON'T USE KUBECTL, USE HELM INSTEAD
+DON'T USE KUBECTL!!!
 ```powershell
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 kubectl delete -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
@@ -105,7 +105,24 @@ kubectl -n cert-manager rollout status deploy/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-cainjector
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook
 ```
+USE HELM INSTEAD FOR VERSION CONTROL
+```powershell
+# All three should come back empty
+kubectl get ns cert-manager
+kubectl get crd | Select-String cert-manager
+kubectl get validatingwebhookconfiguration,mutatingwebhookconfiguration | Select-String cert-manager
 
+# Install
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+helm install cert-manager jetstack/cert-manager `
+  --namespace cert-manager --create-namespace `
+  --version v1.21.1 `
+  --set crds.enabled=true
+
+# Check rollout status
+kubectl -n cert-manager rollout status deploy/cert-manager
+```
 ---
 
 ## 3. Install Rancher via Helm
