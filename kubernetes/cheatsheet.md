@@ -5,6 +5,7 @@ A comprehensive summary of the Kubernetes resources created, ReplicaSet mechanic
 ---
 
 ## 📁 1. Project Files Overview
+
 ```text
 k8s/
 ├── deployment.yaml       # Pod spec, container image, replicas, resource limits, health probes
@@ -14,6 +15,7 @@ k8s/
 ├── ingress.yaml          # (Optional) ALB/Ingress rules for external HTTP(S) routing
 └── serviceaccount.yaml   # (Optional) ServiceAccount with IRSA annotations for AWS IAM permissions (e.g., S3 access)
 ```
+
 | File                                                                                        | Resource Type  | Description                                                                                         |
 | :------------------------------------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------------- |
 | [`namespace.yaml`](file:///h:/code/yl/DevOps-labs/kubernetes/namespace.yaml)               | `Namespace`  | Defines the isolated`prod` (production) namespace boundary                                        |
@@ -80,9 +82,7 @@ kubectl apply -f k8s/ -n <namespace>
 # Verify deployment status
 kubectl get pods -n <namespace>
 kubectl rollout status deployment/<metadata.name> -n <namespace>
-
 ```
-
 
 ---
 
@@ -145,6 +145,10 @@ kubectl exec curlpod -- curl -s http://web-service.prod.svc.cluster.local
 ```powershell
 # List all running pods
 kubectl get pods
+kubectl config get-clusters
+kubectl cluster-info
+
+
 
 # View detailed status of deployment & rollout progress
 kubectl describe deployment webserver-deployment
