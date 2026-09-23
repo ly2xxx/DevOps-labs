@@ -366,3 +366,11 @@ kubectl delete -f deployment.yaml,service_nodeport.yaml,service.yaml,ingress.yam
 # Delete prod namespace and all its resources
 kubectl delete -f namespace.yaml --ignore-not-found=true
 ```
+
+## Appendix: advanced command
+
+See the node resources
+
+```powershell
+kubectl get nodes -o custom-columns=NAME:.metadata.name,CPU:.status.allocatable.cpu,MEM:.status.allocatable.memory
+```
