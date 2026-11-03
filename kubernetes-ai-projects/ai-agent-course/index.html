@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inside the K8s Fix-It Agent</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!--
+    CUSTOMIZE PER COURSE — change only the three accent variables below.
+    Options:
+      vermillion  #D94F30 / #C4432A / #FDEEE9 / #E8836C  (default)
+      coral       #E06B56 / #C85A47 / #FDECEA / #E89585
+      teal        #2A7B9B / #1F6280 / #E4F2F7 / #5A9DB8
+      amber       #D4A843 / #BF9530 / #FDF5E0 / #E0C070
+      forest      #2D8B55 / #226B41 / #E8F5EE / #5AAD7A
+  -->
+  <style>
+    :root {
+      --color-accent:       #D94F30;
+      --color-accent-hover: #C4432A;
+      --color-accent-light: #FDEEE9;
+      --color-accent-muted: #E8836C;
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Inside the K8s Fix-It Agent</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="One Question, End to End" role="tab" aria-label="Module 1: One Question, End to End"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="Meet the Specialists" role="tab" aria-label="Module 2: Meet the Specialists"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="Pausing for a Human" role="tab" aria-label="Module 3: Pausing for a Human"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="Tools and Guardrails" role="tab" aria-label="Module 4: Tools and Guardrails"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="Running It for Real" role="tab" aria-label="Module 5: Running It for Real"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">One Question, End to End</h1>
+      <p class="module-subtitle">You type "why is my pod crashing?" Here's everything that happens before an answer comes back.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">What this thing actually does</h2>
+        <p>This project is a chat window that can look inside a
+          <span class="term" data-definition="Kubernetes (often written K8s) is software that runs and babysits lots of apps across a group of computers. You tell it 'keep 3 copies of my app running' and it makes that true, restarting things that crash. When talking to AI, you'd say 'deploy this to a Kubernetes cluster.'">Kubernetes</span>
+          <span class="term" data-definition="A cluster is the group of computers (called nodes) that Kubernetes manages as one big machine. 'The cluster' means the whole environment your apps live in.">cluster</span>,
+          figure out what's broken, and, once you click Approve, actually fix it. It then checks its own work and tries again if the fix didn't take.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🔍</div>
+            <h4 class="pattern-title">Diagnose</h4>
+            <p class="pattern-desc">Reads pods, logs and events to find the real root cause, not a list of guesses.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">📝</div>
+            <h4 class="pattern-title">Propose</h4>
+            <p class="pattern-desc">Writes a short, specific plan: "patch deployment X to image Y."</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">✋</div>
+            <h4 class="pattern-title">Wait for you</h4>
+            <p class="pattern-desc">Nothing changes on the cluster until a human clicks Approve.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">✅</div>
+            <h4 class="pattern-title">Apply &amp; verify</h4>
+            <p class="pattern-desc">Makes the change, waits, re-inspects, and retries up to 3 times.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔧</div>
+          <div class="callout-content">
+            <strong class="callout-title">Think of it as a mechanic who needs your signature</strong>
+            <p>A good mechanic plugs in the diagnostic scanner, tells you what's wrong, hands you a work order, and only picks up a wrench once you sign. Then they test-drive the car before handing back the keys. This agent follows that exact script.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The three folders</h2>
+        <p>The project splits into three parts that each live in their own folder. Each one is a separate program.</p>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">ai-agent/</span>
+            <span class="ft-desc">The whole project</span>
+            <div class="ft-children">
+              <div class="ft-folder">
+                <span class="ft-name">agent-interface/</span>
+                <span class="ft-desc">The chat window you see (Next.js, TypeScript)</span>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">agent-backend/</span>
+                <span class="ft-desc">The brain: an API server plus the AI agent (Python)</span>
+                <div class="ft-children">
+                  <div class="ft-folder"><span class="ft-name">app/agent/</span><span class="ft-desc">The step-by-step workflow (diagnose → fix → verify)</span></div>
+                  <div class="ft-folder"><span class="ft-name">app/tools/</span><span class="ft-desc">The actions the AI may take on the cluster</span></div>
+                  <div class="ft-folder"><span class="ft-name">app/infra/</span><span class="ft-desc">Plumbing: AI model, database, metrics, cost tracking</span></div>
+                  <div class="ft-file"><span class="ft-name">app/main.py</span><span class="ft-desc">The front desk: every URL the UI can call</span></div>
+                </div>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">k8s/</span>
+                <span class="ft-desc">Instructions for running the agent itself inside Kubernetes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">🖥️</div>
+            <div>
+              <strong>Frontend: <span class="term" data-definition="Next.js is a popular framework for building websites with React. It can also run small bits of server code, which this project uses to forward requests.">Next.js</span></strong>
+              <p>Draws the chat, the Approve/Reject buttons, and the issue picker.</p>
+            </div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🐍</div>
+            <div>
+              <strong>Backend: <span class="term" data-definition="FastAPI is a Python library for building web APIs. You write a normal Python function, put a decorator like @app.post('/api/query') on top, and it becomes a URL other programs can call.">FastAPI</span> + <span class="term" data-definition="LangGraph is a Python library for building AI agents as a flowchart: each box is a step (a 'node'), arrows say which step comes next, and it can pause and resume mid-flow.">LangGraph</span></strong>
+              <p>Receives your question and runs the diagnose → propose → apply → verify flowchart.</p>
+            </div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-3)">☁️</div>
+            <div>
+              <strong>AI model: <span class="term" data-definition="AWS Bedrock is Amazon's service for calling AI models over the internet. You send text, it sends back the model's reply, and you pay per token (roughly per word).">AWS Bedrock</span> (Amazon Nova Pro)</strong>
+              <p>The language model that reads tool output and decides what to do next.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Follow one question through the system</h2>
+        <p>Click <strong>Next Step</strong> to watch "why is my web pod crashing?" travel from your keyboard to the cluster and back.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m1user","label":"You type the question and hit Send. The page POSTs it to /api/query on its own server."},
+          {"highlight":"flow-m1proxy","label":"The Next.js proxy route forwards the request to the Python backend (BACKEND_URL).","packet":true,"from":"m1user","to":"m1proxy"},
+          {"highlight":"flow-m1api","label":"FastAPI checks the question is not empty, creates a fresh session_id, and starts the agent.","packet":true,"from":"m1proxy","to":"m1api"},
+          {"highlight":"flow-m1llm","label":"The Diagnostics step asks Bedrock: here is the question and a list of tools, what should I look at?","packet":true,"from":"m1api","to":"m1llm"},
+          {"highlight":"flow-m1k8s","label":"The model asks for get_pod_status, describe_pod, get_pod_logs. The backend runs them against the Kubernetes API.","packet":true,"from":"m1llm","to":"m1k8s"},
+          {"highlight":"flow-m1llm","label":"Real cluster data goes back to the model, which writes a report ending in REMEDIATION_NEEDED: YES.","packet":true,"from":"m1k8s","to":"m1llm"},
+          {"highlight":"flow-m1api","label":"A second model call drafts the fix. Then the flowchart PAUSES, because nothing may be applied without approval.","packet":true,"from":"m1llm","to":"m1api"},
+          {"highlight":"flow-m1user","label":"Report + proposed fix + session_id return to the browser. You see Approve and Reject buttons.","packet":true,"from":"m1api","to":"m1user"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m1user"><div class="flow-actor-icon">💬</div><span>Chat UI</span></div>
+            <div class="flow-actor" id="flow-m1proxy"><div class="flow-actor-icon">🔀</div><span>Next.js proxy</span></div>
+            <div class="flow-actor" id="flow-m1api"><div class="flow-actor-icon">🐍</div><span>FastAPI + agent</span></div>
+            <div class="flow-actor" id="flow-m1llm"><div class="flow-actor-icon">🧠</div><span>Bedrock model</span></div>
+            <div class="flow-actor" id="flow-m1k8s"><div class="flow-actor-icon">☸️</div><span>Kubernetes API</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The AI never touches the cluster directly</strong>
+            <p>The model only ever <em>asks</em> for a tool by name. Python code decides whether to run it, runs it, and hands back the result. That gap is where every safety check in this project lives, and you'll see it again in Module 4.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Stop 1: the forwarding desk</h2>
+        <p>The browser never talks to Python directly. It calls <code>/api/...</code> on the same website, and a tiny Next.js file passes the request along. The file's odd name, <code>[...path]</code>, means "catch every URL under /api/."</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">agent-interface/app/api/[...path]/route.ts</span>
+            <pre><code><span class="code-line"><span class="code-keyword">async function</span> <span class="code-function">proxy</span>(req: NextRequest, path: string[]): Promise&lt;NextResponse&gt; {</span>
+<span class="code-line">  <span class="code-keyword">const</span> target = <span class="code-string">`${backendUrl()}/api/${path.join("/")}${req.nextUrl.search}`</span>;</span>
+<span class="code-line">  <span class="code-keyword">const</span> init: RequestInit = {</span>
+<span class="code-line">    <span class="code-property">method</span>: req.method,</span>
+<span class="code-line">    <span class="code-property">headers</span>: { <span class="code-string">"Content-Type"</span>: req.headers.<span class="code-function">get</span>(<span class="code-string">"content-type"</span>) || <span class="code-string">"application/json"</span> },</span>
+<span class="code-line">  };</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a helper that takes an incoming request plus the pieces of its URL path.</p>
+              <p class="tl">Build the real address: the backend's base URL, then <code>/api/</code>, then the same path and any <code>?query</code> bits the browser sent.</p>
+              <p class="tl">Start describing the outgoing request...</p>
+              <p class="tl">...using the same method (GET or POST) the browser used...</p>
+              <p class="tl">...and the same content type, defaulting to <span class="term" data-definition="JSON (JavaScript Object Notation) is a text format for structured data, like {&quot;query&quot;: &quot;why is my pod crashing?&quot;}. Nearly every web API sends and receives JSON.">JSON</span>.</p>
+              <p class="tl">Done describing it. The rest of the file sends it and copies the answer back.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why bother with a middleman?</strong>
+            <p>Because the browser only talks to one address, the Python backend can stay private inside the cluster, and you avoid <span class="term" data-definition="CORS (Cross-Origin Resource Sharing) is a browser security rule: a page from site A can't freely call an API on site B unless B explicitly allows it. A same-site proxy sidesteps the whole problem.">CORS</span> headaches. If the backend is down, this file returns a clear 502 error naming the address it couldn't reach.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Stop 2: the front desk opens a ticket</h2>
+        <p>Inside Python, <code>main.py</code> is the reception area. Each <span class="term" data-definition="An endpoint is one specific URL an API answers, like POST /api/query. Each one is a door into the server that does one job.">endpoint</span> is a door. This is the first one your question walks through.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">agent-backend/app/main.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@app.post</span>(<span class="code-string">"/api/query"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">submit_query</span>(request: QueryRequest):</span>
+<span class="code-line">    query = request.query.<span class="code-function">strip</span>()</span>
+<span class="code-line">    <span class="code-keyword">if not</span> query:</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">400</span>, detail=<span class="code-string">"Query cannot be empty."</span>)</span>
+<span class="code-line"></span>
+<span class="code-line">    session_id = <span class="code-function">str</span>(uuid.<span class="code-function">uuid4</span>())</span>
+<span class="code-line">    config = {<span class="code-string">"configurable"</span>: {<span class="code-string">"thread_id"</span>: session_id}}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">When someone POSTs to <code>/api/query</code>, run the function below.</p>
+              <p class="tl">The incoming body must match the <code>QueryRequest</code> shape (it must have a <code>query</code> text field).</p>
+              <p class="tl">Trim spaces off the question.</p>
+              <p class="tl">If nothing is left...</p>
+              <p class="tl">...reject it with error 400 ("bad request") instead of wasting an AI call.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Generate a random, unique ticket number (a <span class="term" data-definition="A UUID is a long random ID like 3f2a9c1e-... that is practically guaranteed to be unique, so two sessions never collide.">UUID</span>) for this conversation.</p>
+              <p class="tl">Tag the agent run with that ticket so it can be paused now and found again later.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>That <code>thread_id</code> is the thread you'll pull on all through Module 3: it's how clicking Approve two minutes later reconnects to <em>this exact</em> half-finished investigation.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module1">
+
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Right. The browser only knows about its own /api address. If the backend container is down or BACKEND_URL points somewhere wrong, the proxy route catches the failure and answers 502 with a message naming the address it tried."
+               data-explanation-wrong="Not quite. The browser never contacts Python directly. It talks to the Next.js proxy, and the proxy is the one that fails to reach the backend, so look at BACKEND_URL and whether the backend is running.">
+            <h3 class="quiz-question">The chat shows "Failed to reach backend at http://127.0.0.1:8000". Where is the problem most likely?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>AWS Bedrock is rejecting the request</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Next.js proxy can't connect to the Python backend (it isn't running, or BACKEND_URL is wrong)</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Kubernetes cluster is down</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Exactly. The model can only request a tool. The Python loop decides whether to actually run it. That's why guardrails written in Python are dependable and guardrails written only as instructions to the model are not."
+               data-explanation-wrong="Close, but the model never connects to Kubernetes. It returns a request like 'please call describe_pod', and Python code chooses whether to run it. That's the safest place to block something.">
+            <h3 class="quiz-question">You want to make sure the AI can never delete anything in the "payments" namespace. Where is the most reliable place to enforce that?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add "never delete anything in payments" to the AI's instructions</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Hide the Reject button in the chat UI</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>In the Python code that actually runs the delete tool, before it calls Kubernetes</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Every new question gets a brand-new session_id. If your approval click sent an old or wrong ID, the backend can't find the paused investigation it belongs to."
+               data-explanation-wrong="Think about what links the 'Approve' click back to the investigation. Every question gets its own session_id (thread_id), and the decision has to carry that same ID.">
+            <h3 class="quiz-question">You ask a question, then ask a second one before approving the first fix. Why does the UI say the first proposal was "dropped"?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The new question starts a new session_id, and the UI only tracks one session at a time</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Bedrock can only handle one question per minute</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Kubernetes cancels pending changes automatically</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">Meet the Specialists</h1>
+      <p class="module-subtitle">The "agent" is really four focused roles passing one shared chart between them.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A hospital ward, not a genius</h2>
+        <p>It's tempting to picture one all-knowing AI. In reality, the backend runs a
+          <span class="term" data-definition="A state machine is a program that is always in exactly one named 'state' (like 'diagnosing' or 'waiting for approval') and has clear rules for moving to the next one. Traffic lights are state machines.">state machine</span>
+          of separate steps. Each step is a specialist with its own instructions, and they all read and write the same patient chart.</p>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🔍</div>
+            <div><strong>diagnose</strong><p>The examining doctor. Read-only tools only. Writes the diagnosis and raises a YES/NO flag: does anything need changing?</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-4)">☑️</div>
+            <div><strong>select_issues</strong><p>The triage desk. Only shows up when more than one problem was found, so you can pick which to fix.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">📝</div>
+            <div><strong>propose_remediation / propose_retry</strong><p>The surgeon planning the operation. Writes a 2-4 sentence plan naming the exact tool and arguments.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-3)">🛠️</div>
+            <div><strong>apply_remediation</strong><p>The surgeon operating. The only step holding write tools: patch, scale, delete, apply YAML.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-5)">🩺</div>
+            <div><strong>verify_remediation</strong><p>The follow-up check. Waits 15 seconds, re-reads the cluster and answers GOAL_ACHIEVED: YES or NO.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Wiring the flowchart</h2>
+        <p>The whole flowchart is declared in one short file. Each <span class="term" data-definition="In LangGraph, a node is one box in the flowchart: a Python function that receives the current state and returns the pieces of state it wants to change.">node</span> is registered by name and pointed at a Python
+          <span class="term" data-definition="A function is a named, reusable chunk of code that takes inputs and gives back an output. 'diagnose_node' is a function; calling it runs the diagnosis.">function</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/graph.py</span>
+            <pre><code><span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"diagnose"</span>, diagnose_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"select_issues"</span>, select_issues_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"propose_remediation"</span>, propose_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"propose_retry"</span>, propose_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"apply_remediation"</span>, apply_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"verify_remediation"</span>, verify_remediation_node)</span>
+<span class="code-line"></span>
+<span class="code-line">workflow.<span class="code-function">set_entry_point</span>(<span class="code-string">"diagnose"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Box 1, "diagnose", runs the diagnosis function.</p>
+              <p class="tl">Box 2, "select_issues", is the triage pause.</p>
+              <p class="tl">Box 3 drafts the first fix plan.</p>
+              <p class="tl">Box 4 drafts a <em>retry</em> plan, using the <strong>same function</strong> under a different name.</p>
+              <p class="tl">Box 5 actually changes the cluster.</p>
+              <p class="tl">Box 6 checks whether it worked.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Every run starts at "diagnose."</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Same function, two names: why?</strong>
+            <p><code>propose_remediation</code> and <code>propose_retry</code> do identical work. Giving them separate names lets the system pause <em>before a retry</em> without pausing before the first proposal. Naming a step is how you get to attach rules to it, a trick worth asking AI for by name ("make it a separate node so I can interrupt before it").</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The shared chart</h2>
+        <p>Every specialist receives the same <span class="term" data-definition="State is the data a program remembers while it runs. Here it's one dictionary holding the user's question, the diagnosis, the proposed fix, the attempt count and so on.">state</span>, a
+          <span class="term" data-definition="A TypedDict is a Python dictionary (a set of named fields) where each field's type is declared up front, like a form with labelled boxes. It helps tools catch typos in field names.">TypedDict</span>
+          with labelled fields. A node returns only the boxes it filled in, and LangGraph merges them into the chart.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/state.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">class</span> <span class="code-function">AgentState</span>(TypedDict):</span>
+<span class="code-line">    <span class="code-property">messages</span>: Annotated[List[BaseMessage], operator.add]</span>
+<span class="code-line">    <span class="code-property">user_request</span>: str</span>
+<span class="code-line">    <span class="code-property">diagnostic_report</span>: str</span>
+<span class="code-line">    <span class="code-property">remediation_needed</span>: bool</span>
+<span class="code-line">    <span class="code-property">goal_achieved</span>: bool</span>
+<span class="code-line">    <span class="code-property">blocked</span>: bool</span>
+<span class="code-line">    <span class="code-property">retry_context</span>: str</span>
+<span class="code-line">    <span class="code-property">issues</span>: List[str]</span>
+<span class="code-line">    <span class="code-property">proposed_fix</span>: str</span>
+<span class="code-line">    <span class="code-property">approval_status</span>: str</span>
+<span class="code-line">    <span class="code-property">fix_result</span>: str</span>
+<span class="code-line">    <span class="code-property">verification_result</span>: str</span>
+<span class="code-line">    <span class="code-property">attempt</span>: int</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Here's the chart every step shares.</p>
+              <p class="tl">The running conversation. <code>operator.add</code> means new messages get <strong>appended</strong>, never overwritten.</p>
+              <p class="tl">What you originally asked.</p>
+              <p class="tl">The diagnostician's write-up.</p>
+              <p class="tl">The YES/NO flag: does anything need changing?</p>
+              <p class="tl">Did the verifier confirm success?</p>
+              <p class="tl">Was the fix refused outright (retrying is pointless)?</p>
+              <p class="tl">Notes on failed attempts so the next plan doesn't repeat them.</p>
+              <p class="tl">Separate problems found, if more than one.</p>
+              <p class="tl">The current plan.</p>
+              <p class="tl">"pending" or "approved".</p>
+              <p class="tl">What happened when the fix ran.</p>
+              <p class="tl">The verifier's findings.</p>
+              <p class="tl">How many tries so far.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Listen in on the ward round</h2>
+        <p>Here's a real-shaped run, told as a group chat between the nodes. A Deployment is stuck because its image tag doesn't exist.</p>
+
+        <div class="chat-window" id="chat-module2">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="user" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-secondary)">You</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-secondary)">You</span><p>why is the web pod in shop-ns not starting?</p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="diag" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">diagnose</span><p>On it. Calling get_pod_status, then describe_pod. Container is waiting with reason <strong>ImagePullBackOff</strong>: image "nginx:1.99-typo" not found.</p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="diag" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">diagnose</span><p>owner_references says a Deployment owns this pod, so the fix must be on the Deployment. One issue only. REMEDIATION_NEEDED: YES.</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-4)">route_after_diagnose</span><p>Flag is YES, one issue, so skip triage. Next up: propose_remediation.</p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="prop" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">P</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">propose_remediation</span><p>Plan: patch_deployment_image(deployment_name='web', container_name='web', image='nginx:1.27', namespace='shop-ns'). No restart, because the bad image is baked into the spec.</p></div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="gate" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-muted)">⏸</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-muted)">LangGraph</span><p>Pausing before apply_remediation. Waiting for a human. (Saved everything to the checkpoint.)</p></div>
+            </div>
+            <div class="chat-message" data-msg="6" data-sender="user" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-secondary)">You</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-secondary)">You</span><p>👍 Approve</p></div>
+            </div>
+            <div class="chat-message" data-msg="7" data-sender="apply" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">A</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">apply_remediation</span><p>approval_status is "approved", so I'm allowed. Called patch_deployment_image. Result: success. attempt = 1.</p></div>
+            </div>
+            <div class="chat-message" data-msg="8" data-sender="verify" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-5)">V</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-5)">verify_remediation</span><p>Slept 15s. I don't trust "success" from a tool, so I re-read the Deployment: 1/1 ready, pod Running, 0 restarts in shop-ns. GOAL_ACHIEVED: YES.</p></div>
+            </div>
+          </div>
+
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">How a paragraph becomes a yes/no</h2>
+        <p>An AI model answers in prose, but code needs a
+          <span class="term" data-definition="A boolean is a value that is either True or False, nothing else. Code uses booleans to decide which branch to take.">boolean</span>.
+          The trick: the instructions demand the reply end with a fixed line like <code>REMEDIATION_NEEDED: YES</code>, and a
+          <span class="term" data-definition="A regex (regular expression) is a mini-language for finding patterns in text, like 'the word FLAG, a colon, then YES or NO'. Powerful but easy to get subtly wrong.">regex</span> fishes it out.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/parsing.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">_extract_flag</span>(text: str, flag: str) -&gt; tuple:</span>
+<span class="code-line">    pattern = <span class="code-string">rf"\s*{flag}\s*[:=]\s*(YES|NO)\b[^\n]*"</span></span>
+<span class="code-line">    match = re.<span class="code-function">search</span>(pattern, text, re.IGNORECASE)</span>
+<span class="code-line">    is_yes = <span class="code-function">bool</span>(match) <span class="code-keyword">and</span> match.<span class="code-function">group</span>(<span class="code-number">1</span>).<span class="code-function">upper</span>() == <span class="code-string">"YES"</span></span>
+<span class="code-line">    cleaned = re.<span class="code-function">sub</span>(pattern, <span class="code-string">""</span>, text, flags=re.IGNORECASE)</span>
+<span class="code-line">    <span class="code-keyword">return</span> is_yes, re.<span class="code-function">sub</span>(<span class="code-string">r"\n{3,}"</span>, <span class="code-string">"\n\n"</span>, cleaned).<span class="code-function">strip</span>()</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Given the model's reply and a flag name like "REMEDIATION_NEEDED"...</p>
+              <p class="tl">...describe the pattern: the flag name, a colon or equals sign, then YES or NO.</p>
+              <p class="tl">Look for it anywhere, ignoring upper/lower case.</p>
+              <p class="tl">It's a YES only if the line was found <strong>and</strong> says YES. Missing flag = NO (the safe default).</p>
+              <p class="tl">Cut that line out so the user never sees the robot-speak.</p>
+              <p class="tl">Hand back the yes/no plus the tidied-up report.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Then a tiny <span class="term" data-definition="A router (in LangGraph, a 'conditional edge') is a function that looks at the state and returns the name of the next node to run. It's the fork in the flowchart.">router</span> function reads those flags and picks the next box:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">route_after_diagnose</span>(state: AgentState) -&gt; str:</span>
+<span class="code-line">    <span class="code-keyword">if not</span> state.<span class="code-function">get</span>(<span class="code-string">"remediation_needed"</span>):</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> <span class="code-function">len</span>(state.<span class="code-function">get</span>(<span class="code-string">"issues"</span>, []) <span class="code-keyword">or</span> []) &gt; <span class="code-number">1</span>:</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-string">"select_issues"</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"propose_remediation"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">After diagnosis, decide where to go.</p>
+              <p class="tl">If nothing needs changing (a read-only question)...</p>
+              <p class="tl">...stop here and just show the report.</p>
+              <p class="tl">If more than one separate problem was found...</p>
+              <p class="tl">...go to triage so the human picks.</p>
+              <p class="tl">Otherwise, go straight to drafting a fix.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">When the model "refuses," the code pushes back</strong>
+            <p>Language models love to say "I can't execute commands, please run kubectl..." In <code>diagnose_node</code>, if the reply says NO <em>and</em> contains phrases like "as an ai" or "please run", the code sends a corrective message and asks again. If your own agent keeps giving advice instead of acting, this pattern is the fix to request.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Match the specialist to the job</h2>
+        <p>Drag each node onto the task it owns.</p>
+
+        <div class="dnd-container" id="dnd-module2">
+          <div class="dnd-chips">
+            <div class="dnd-chip" draggable="true" data-answer="diag">diagnose</div>
+            <div class="dnd-chip" draggable="true" data-answer="prop">propose_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="apply">apply_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="verify">verify_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="select">select_issues</div>
+          </div>
+          <div class="dnd-zones">
+            <div class="dnd-zone" data-correct="verify"><p class="dnd-zone-label">Refuses to trust a tool's "success" message and re-reads the live object</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="apply"><p class="dnd-zone-label">The only step allowed to call write tools like patch_deployment</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="diag"><p class="dnd-zone-label">Decides whether REMEDIATION_NEEDED is YES or NO</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="select"><p class="dnd-zone-label">Only runs when two or more unrelated problems were found</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="prop"><p class="dnd-zone-label">Writes a 2-4 sentence plan naming the exact tool and arguments</p><div class="dnd-zone-target">Drop here</div></div>
+          </div>
+          <button class="btn" onclick="checkDnD('dnd-module2')">Check Matches</button>
+          <button class="btn" onclick="resetDnD('dnd-module2')">Reset</button>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module2">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You ask "list the pods in shop-ns." The agent answers with a correct list but no Approve button appears.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Correct. A read-only question should end with REMEDIATION_NEEDED: NO, and route_after_diagnose sends that straight to END. No fix, no button. Working as designed."
+                 data-explanation-wrong="Not a bug. Trace the router: no remediation flag means it returns END right after diagnosis, so there's nothing to approve.">
+              <h3 class="quiz-question">What happened?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A bug: the proposal step crashed</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Expected: diagnose flagged NO, so the router went straight to END</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The approval setting is turned off</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You switch to a new model. Now it often ends its replies with "**Remediation needed** - yes" in bold, with no colon.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Exactly. The regex wants the flag name, then ':' or '=', then YES/NO. No match means is_yes is False, so real problems get reported but never fixed. That's why prompts insist on the exact line, and why changing models deserves a re-test."
+                 data-explanation-wrong="Look at the pattern in _extract_flag: it needs REMEDIATION_NEEDED followed by ':' or '='. A bold, colon-less version won't match, and a missing match counts as NO.">
+              <h3 class="quiz-question">What symptom would you expect?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The app crashes with an error</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Every question now proposes a fix</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Broken resources get diagnosed, but no fix is ever proposed</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Adding a box and wiring it up in graph.py keeps each role focused, and you can pause before it, time it, and test it on its own. Stuffing it into another node's prompt makes that prompt even longer and harder to reason about."
+               data-explanation-wrong="Think about how the existing design handles each new responsibility: it gets its own node in graph.py. That keeps roles focused and lets you pause, time and test each one separately.">
+            <h3 class="quiz-question">You want a "backup the resource before changing it" step. How should you ask an AI to build it?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add a backup_resource node in graph.py between propose_remediation and apply_remediation"</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add a sentence to the diagnose prompt telling it to back things up"</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Make the frontend download the YAML before sending Approve"</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-3" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Pausing for a Human</h1>
+      <p class="module-subtitle">How an investigation freezes mid-flight, waits for your click, and picks up exactly where it stopped.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The save point</h2>
+        <p>In a video game you hit a save point, switch off the console, and the next day you're standing in the same room with the same inventory. This agent does the same thing between "here's my proposed fix" and your Approve click, which might come seconds or hours later.</p>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p>Agent runs until it reaches a guarded step</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p>Whole state saved under the session's <code>thread_id</code></p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>HTTP request finishes; you see Approve / Reject</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">4</div><p>Your click loads the save and continues</p></div>
+        </div>
+
+        <p>The "save" is called a <span class="term" data-definition="A checkpoint is a saved snapshot of the agent's entire state at a moment in time. LangGraph writes one after every step so a paused run can be resumed later, even by a different server process.">checkpoint</span>, and the thing that stores it is the <span class="term" data-definition="The checkpointer is the storage backend LangGraph uses for checkpoints: either plain memory inside the running program, or a real database like Postgres.">checkpointer</span>.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where the pauses are declared</h2>
+        <p>One line decides which boxes need a human's permission before they run.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/graph.py</span>
+            <pre><code><span class="code-line">checkpointer = <span class="code-function">build_checkpointer</span>()</span>
+<span class="code-line">compiled_graph = workflow.<span class="code-function">compile</span>(</span>
+<span class="code-line">    checkpointer=checkpointer,</span>
+<span class="code-line">    interrupt_before=[<span class="code-string">"select_issues"</span>, <span class="code-string">"apply_remediation"</span>, <span class="code-string">"propose_retry"</span>] <span class="code-keyword">if</span> REQUIRE_APPROVAL <span class="code-keyword">else</span> [],</span>
+<span class="code-line">)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Set up storage for save points (database or memory; see next screen).</p>
+              <p class="tl">Turn the flowchart into a runnable program...</p>
+              <p class="tl">...that saves its state after every step...</p>
+              <p class="tl">...and <strong>stops just before</strong> triage, applying a fix, or retrying, but only if approval is required. If <code>REQUIRE_APPROVAL</code> is "false", the list is empty and it never stops.</p>
+              <p class="tl">Done.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">One environment variable removes the human</strong>
+            <p>Set <code>REQUIRE_APPROVAL=false</code> and <code>/api/query</code> runs diagnose → fix → verify in a single request, with an AI changing your cluster unsupervised. The deploy guide says to leave it <code>"true"</code>. When an AI suggests "just flip this flag to simplify," you now know what it costs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where the save file lives</h2>
+        <p>The checkpointer picks its storage based on one
+          <span class="term" data-definition="An environment variable is a setting handed to a program from outside, like DATABASE_URL=postgresql://... . It lets the same code behave differently on your laptop vs. in production without editing the code.">environment variable</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/infra/checkpointer.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">build_checkpointer</span>():</span>
+<span class="code-line">    database_url = os.<span class="code-function">getenv</span>(<span class="code-string">"DATABASE_URL"</span>)</span>
+<span class="code-line">    <span class="code-keyword">if not</span> database_url:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">"DATABASE_URL not set - using in-process MemorySaver (state lost on restart, not shared across replicas)."</span>)</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-function">MemorySaver</span>()</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Decide where to keep save points.</p>
+              <p class="tl">Is there a database address configured?</p>
+              <p class="tl">If not...</p>
+              <p class="tl">...log a loud warning: saves live only in this one program's memory. A restart wipes them, and a second copy of the server can't see them.</p>
+              <p class="tl">Use the in-memory store. (Otherwise the rest of the function connects to <span class="term" data-definition="Postgres (PostgreSQL) is a popular, free, rock-solid database. Here it stores checkpoints and chat history so they survive restarts and are shared between server copies.">Postgres</span> through a <span class="term" data-definition="A connection pool keeps a handful of database connections open and lends them out, instead of opening a fresh connection for every request, which is slow.">connection pool</span>.)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🧠</div>
+            <h4 class="pattern-title">MemorySaver</h4>
+            <p class="pattern-desc">Fine on your laptop. Lost on restart. Invisible to other <span class="term" data-definition="A replica is one running copy of the same program. Running 2 replicas means two identical servers sharing the traffic, so one can die without an outage.">replicas</span>.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">🐘</div>
+            <h4 class="pattern-title">PostgresSaver</h4>
+            <p class="pattern-desc">Survives restarts. Any replica can resume any session. Needed in production.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The approve-apply-verify loop</h2>
+        <p>Step through what happens after you click Approve on a fix that doesn't work the first time.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m3you","label":"You click Approve. The UI POSTs session_id + approved=true to /api/decision."},
+          {"highlight":"flow-m3store","label":"The backend loads the save point for that thread_id and sets approval_status to approved.","packet":true,"from":"m3you","to":"m3store"},
+          {"highlight":"flow-m3apply","label":"invoke(None) resumes the graph. apply_remediation calls a write tool. attempt becomes 1.","packet":true,"from":"m3store","to":"m3apply"},
+          {"highlight":"flow-m3verify","label":"verify waits 15s, re-reads the cluster: still broken. GOAL_ACHIEVED: NO.","packet":true,"from":"m3apply","to":"m3verify"},
+          {"highlight":"flow-m3store","label":"Router says: not blocked, attempts left, so pause before propose_retry. What failed is added to retry_context.","packet":true,"from":"m3verify","to":"m3store"},
+          {"highlight":"flow-m3apply","label":"Inside the same request, the backend runs propose_retry and auto-approves the new plan.","packet":true,"from":"m3store","to":"m3apply"},
+          {"highlight":"flow-m3verify","label":"Verify again. Success, or another round until attempt reaches MAX_REMEDIATION_ATTEMPTS (3).","packet":true,"from":"m3apply","to":"m3verify"},
+          {"highlight":"flow-m3you","label":"One response comes back with the final result and the full attempt_history.","packet":true,"from":"m3verify","to":"m3you"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m3you"><div class="flow-actor-icon">👤</div><span>You + UI</span></div>
+            <div class="flow-actor" id="flow-m3store"><div class="flow-actor-icon">💾</div><span>Checkpoint</span></div>
+            <div class="flow-actor" id="flow-m3apply"><div class="flow-actor-icon">🛠️</div><span>apply</span></div>
+            <div class="flow-actor" id="flow-m3verify"><div class="flow-actor-icon">🩺</div><span>verify</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/main.py (inside submit_decision)</span>
+            <pre><code><span class="code-line">        <span class="code-keyword">if</span> <span class="code-string">"apply_remediation"</span> <span class="code-keyword">in</span> next_nodes:</span>
+<span class="code-line">            compiled_graph.<span class="code-function">update_state</span>(config, {<span class="code-string">"approval_status"</span>: <span class="code-string">"approved"</span>})</span>
+<span class="code-line">            output_state = compiled_graph.<span class="code-function">invoke</span>(<span class="code-keyword">None</span>, config)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the graph is paused right before applying a (retry) fix...</p>
+              <p class="tl">...stamp the chart "approved" on the human's behalf...</p>
+              <p class="tl">...and resume. <code>None</code> means "no new input, continue from the save."</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">One click can authorize several different fixes</strong>
+            <p>The graph pauses before each retry, but <code>/api/decision</code> loops and approves those retries itself. So your one Approve covers the first plan <em>and</em> up to two follow-up plans you never read. That's a product decision, not a bug, but it's exactly the kind of detail to check before trusting an agent with production.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Belt and braces</h2>
+        <p>Even if something resumed the graph without your approval, the apply step checks the chart itself before touching anything:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py (apply_remediation_node)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> REQUIRE_APPROVAL <span class="code-keyword">and</span> state.<span class="code-function">get</span>(<span class="code-string">"approval_status"</span>) != <span class="code-string">"approved"</span>:</span>
+<span class="code-line">        <span class="code-keyword">return</span> {</span>
+<span class="code-line">            <span class="code-string">"messages"</span>: [<span class="code-function">AIMessage</span>(content=<span class="code-string">"Remediation was not approved. Skipping fix execution."</span>)],</span>
+<span class="code-line">            <span class="code-string">"fix_result"</span>: <span class="code-string">"Skipped (not approved)"</span></span>
+<span class="code-line">        }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If approval is required and the chart doesn't say "approved"...</p>
+              <p class="tl">...don't do anything. Instead return:</p>
+              <p class="tl">a note for the conversation saying it was skipped,</p>
+              <p class="tl">and a result the verifier recognises as "nothing happened."</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Engineers call this <span class="term" data-definition="Defense in depth means stacking several independent safety checks, so that if one fails or is bypassed, another still catches the problem. Like a seatbelt plus an airbag.">defense in depth</span>. The pause is the first lock; this check is the second.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">When to stop retrying</h2>
+        <p>After every verification, a router picks one of four outcomes and counts it as a
+          <span class="term" data-definition="A metric is a number a program publishes about itself (requests served, errors, seconds spent) so dashboards and alerts can track it over time.">metric</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">route_after_verify</span>(state: AgentState) -&gt; str:</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"goal_achieved"</span>):</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"succeeded"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"blocked"</span>):</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"blocked"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"attempt"</span>, <span class="code-number">0</span>) &gt;= MAX_ATTEMPTS:</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"exhausted"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"retrying"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"propose_retry"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">After verifying, decide what's next.</p>
+              <p class="tl">Fixed?</p>
+              <p class="tl">Count a "succeeded"...</p>
+              <p class="tl">...and stop.</p>
+              <p class="tl">Was the action refused by a hard rule?</p>
+              <p class="tl">Count "blocked"...</p>
+              <p class="tl">...and stop, because trying again would be refused identically.</p>
+              <p class="tl">Out of attempts (default 3)?</p>
+              <p class="tl">Count "exhausted"...</p>
+              <p class="tl">...and stop.</p>
+              <p class="tl">Otherwise count a "retrying"...</p>
+              <p class="tl">...and go draft a new plan, with notes on what already failed.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">retry_context</code><span class="badge-desc">"--- Attempt 1 --- Applied: ... Verification: ..." so the next plan avoids repeating a failure</span></div>
+          <div class="badge-item"><code class="badge-code">/api/guidance</code><span class="badge-desc">Adds "--- Human guidance for the next attempt ---" which the planner is told overrides its own judgment</span></div>
+          <div class="badge-item"><code class="badge-code">conversation_history</code><span class="badge-desc">Past turns are stored labelled "[earlier reply - historical, may be out of date]" so old refusals aren't repeated</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module3">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>To handle more traffic, you scale the backend to 2 replicas. You forgot to set DATABASE_URL. Now Approve sometimes fails with 404 "Unknown or already-completed session_id."</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Spot on. With MemorySaver, each replica keeps its own private save points. If the question hit replica A and the Approve click lands on replica B, B has never heard of that session. Postgres-backed checkpoints fix it."
+                 data-explanation-wrong="Think about where the save point physically lives. With no DATABASE_URL it's inside one process's memory, and the other replica can't see it.">
+              <h3 class="quiz-question">What's the root cause?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The session expired because you waited too long</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Each replica has its own in-memory checkpoints, and the click reached the other one</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Bedrock lost the conversation</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>The first fix fails. Attempt 2 tries the exact same refused action again, and so does attempt 3.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Right. A refusal starting with BLOCKED sets blocked=True, and the router stops immediately. If a refusal message doesn't trigger that path, the loop keeps trying. Check how apply_remediation classifies the tool's result."
+                 data-explanation-wrong="The design already has an escape hatch for 'this will never work': the blocked flag. If retries repeat a refused action, the question is why that flag wasn't set.">
+              <h3 class="quiz-question">Which part of the design should have stopped this early?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The checkpointer</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Next.js proxy</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The "blocked" flag, which makes route_after_verify end instead of retrying</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Adding a pause means adding the node name to interrupt_before, and then making /api/decision stop auto-approving retries, so the UI can show each new plan. Both halves matter."
+               data-explanation-wrong="The graph already pauses before propose_retry and apply_remediation. The reason you don't see each retry is that /api/decision's loop approves them itself. That loop is what needs changing.">
+            <h3 class="quiz-question">Your team wants a human to approve <em>every</em> retry plan individually. What needs to change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Stop the /api/decision loop from auto-approving, and return the new proposal to the UI instead</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Set REQUIRE_APPROVAL=false</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Lower MAX_REMEDIATION_ATTEMPTS to 1</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Tools and Guardrails</h1>
+      <p class="module-subtitle">How an AI "uses" Kubernetes, and the safety interlocks that stop it from doing something dumb.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A tool is a function plus a description</h2>
+        <p>The model can't run code. What it gets is a menu: each <span class="term" data-definition="In AI agents, a tool is a normal function the model is allowed to request by name. The model says 'call describe_pod with pod_name=web-123', and your code runs it and hands back the result. This is also called 'function calling'.">tool</span>'s name, its arguments, and its
+          <span class="term" data-definition="A docstring is the text in triple quotes right under a Python function's name, describing what it does. In this project the docstring is sent to the AI as the tool's instructions, so it directly shapes the AI's behaviour.">docstring</span>. The
+          <span class="term" data-definition="A decorator is the @something line placed above a function. It wraps the function to give it extra powers. Here, @tool turns a plain function into something the AI can see and request.">decorator</span> <code>@tool</code> builds that menu entry automatically.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/read.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@tool</span></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">list_namespaces</span>() -&gt; str:</span>
+<span class="code-line">    <span class="code-comment">"""List all namespaces in the Kubernetes cluster."""</span></span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        v1 = client.<span class="code-function">CoreV1Api</span>()</span>
+<span class="code-line">        namespaces = v1.<span class="code-function">list_namespace</span>()</span>
+<span class="code-line">        ns_list = [ns.metadata.name <span class="code-keyword">for</span> ns <span class="code-keyword">in</span> namespaces.items]</span>
+<span class="code-line">        <span class="code-keyword">return</span> json.<span class="code-function">dumps</span>({<span class="code-string">"namespaces"</span>: ns_list})</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Put this function on the AI's menu.</p>
+              <p class="tl">Its name is what the AI asks for. It takes no arguments and returns text.</p>
+              <p class="tl">This sentence is literally what the AI reads to decide when to use it.</p>
+              <p class="tl">Try the following (and on failure, return an error message instead of crashing).</p>
+              <p class="tl">Get a handle on the Kubernetes "core" <span class="term" data-definition="An API (Application Programming Interface) is a set of requests one program can make to another. The Kubernetes API is how every tool, including kubectl, reads and changes the cluster.">API</span>.</p>
+              <p class="tl">Ask it for every <span class="term" data-definition="A namespace is a named folder inside a Kubernetes cluster that groups related resources, like 'shop-ns' or 'kube-system'. The same pod name can exist in two different namespaces.">namespace</span>.</p>
+              <p class="tl">Keep just the names.</p>
+              <p class="tl">Send them back as JSON text for the AI to read.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">👀</div>
+            <h4 class="pattern-title">24 read tools</h4>
+            <p class="pattern-desc"><code>diag_tools</code>: get_pod_logs, describe_pod, get_cluster_events, check_permission, get_resource (any kind)...</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">✍️</div>
+            <h4 class="pattern-title">11 write tools</h4>
+            <p class="pattern-desc"><code>remedy_tools</code>: patch_deployment, scale_deployment, apply_kubernetes_yaml, delete_resource...</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🔐</div>
+            <h4 class="pattern-title">Who gets what</h4>
+            <p class="pattern-desc">diagnose, propose and verify get only read tools. Only apply_remediation is handed both.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The ask-run-answer loop</h2>
+        <p>Every specialist runs the same short loop: ask the model, run whatever tools it requested, feed the results back, repeat. A hard cap (8 rounds for diagnosis) stops it from investigating forever.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">for</span> _ <span class="code-keyword">in</span> <span class="code-function">range</span>(limit):</span>
+<span class="code-line">        response = model_with_tools.<span class="code-function">invoke</span>(curr_messages)</span>
+<span class="code-line">        <span class="code-function">record_usage</span>(<span class="code-string">"diagnostics"</span>, response)</span>
+<span class="code-line">        curr_messages.<span class="code-function">append</span>(response)</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-keyword">if</span> response.tool_calls:</span>
+<span class="code-line">            <span class="code-keyword">for</span> tc <span class="code-keyword">in</span> response.tool_calls:</span>
+<span class="code-line">                tool_func = diag_tool_map.<span class="code-function">get</span>(tc[<span class="code-string">"name"</span>])</span>
+<span class="code-line">                <span class="code-keyword">if</span> tool_func:</span>
+<span class="code-line">                    logger.<span class="code-function">info</span>(<span class="code-string">f"tool_call diagnostics {tc['name']} args={tc['args']}"</span>)</span>
+<span class="code-line">                    result = <span class="code-function">invoke_tool_safely</span>(tool_func, tc[<span class="code-string">"args"</span>])</span>
+<span class="code-line">                    <span class="code-function">record_tool_call</span>(tc[<span class="code-string">"name"</span>], result)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Repeat at most <code>limit</code> times (8 here).</p>
+              <p class="tl">Send the whole conversation so far to the model.</p>
+              <p class="tl">Count the <span class="term" data-definition="A token is a chunk of text (roughly 3/4 of a word) that AI models read and write. Providers charge per token, so long prompts and long tool outputs cost real money.">tokens</span> it used, for the cost display.</p>
+              <p class="tl">Add its reply to the conversation.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Did it ask for any tools?</p>
+              <p class="tl">For each request...</p>
+              <p class="tl">...look the name up in the <strong>read-only</strong> tool list. (A write tool name simply won't be found here.)</p>
+              <p class="tl">If it's real...</p>
+              <p class="tl">...write a log line showing exactly what was asked for,</p>
+              <p class="tl">run it, turning any crash into an error message the model can read,</p>
+              <p class="tl">and count success/error for the metrics dashboard.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Made-up tool name?</strong><p>The code replies "Tool 'list_pods' does not exist... Your real available tools are: [...]" so the model can correct itself.</p></div></div>
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Hit the round limit?</strong><p>One last call: "You have reached your investigation limit... give your final diagnostic report now."</p></div></div>
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Apply step wrote text instead of calling a tool?</strong><p>"You did not call a tool, so NOTHING happened." And if it never calls one, the result is recorded as FAILED, not success.</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Safety interlocks in the write tools</h2>
+        <p>A table saw has a blade guard and a kill switch because a sharp tool plus a distracted operator is dangerous. The write tools carry the same kind of interlocks, written in Python so the model <em>can't</em> talk its way past them.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🪪</div>
+            <h4 class="pattern-title">No self-promotion</h4>
+            <p class="pattern-desc">Can't edit its own ServiceAccount, ClusterRole or bindings. That would let it grant itself more power.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🏛️</div>
+            <h4 class="pattern-title">System namespaces</h4>
+            <p class="pattern-desc">kube-system and friends: hands off while healthy, allowed only once something is confirmed broken.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🔁</div>
+            <h4 class="pattern-title">Pointless restarts</h4>
+            <p class="pattern-desc">Refuses to restart a pod failing with ImagePullBackOff or a missing ConfigMap. A fresh copy fails the same way.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🧍</div>
+            <h4 class="pattern-title">Orphan pods</h4>
+            <p class="pattern-desc">Won't delete a <span class="term" data-definition="A standalone pod has no owner (no Deployment or ReplicaSet behind it). If you delete it, nothing recreates it. It's simply gone.">standalone pod</span> unless <code>recreating=true</code>.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">💽</div>
+            <h4 class="pattern-title">Live storage</h4>
+            <p class="pattern-desc">Refuses to delete a Bound <span class="term" data-definition="A PersistentVolume (PV) is a piece of real disk storage in the cluster. A PersistentVolumeClaim (PVC) is an app's request for storage; when matched, the PV is 'Bound' to it.">PersistentVolume</span>, and won't delete Nodes at all.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-text-secondary)">
+            <div class="pattern-icon" style="background: var(--color-text-secondary)">📍</div>
+            <h4 class="pattern-title">No guessing "default"</h4>
+            <p class="pattern-desc">Namespaced writes without a namespace are refused instead of silently landing in the wrong place.</p>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/guards.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> namespace <span class="code-keyword">in</span> PROTECTED_NAMESPACES:</span>
+<span class="code-line">        unhealthy = <span class="code-function">_target_is_unhealthy</span>(kind, name, namespace)</span>
+<span class="code-line">        <span class="code-keyword">if</span> unhealthy <span class="code-keyword">is</span> <span class="code-keyword">False</span>:</span>
+<span class="code-line">            <span class="code-keyword">return</span> (</span>
+<span class="code-line">                <span class="code-string">f"REFUSED: {kind}/{name} is in the protected system namespace '{namespace}' and is "</span></span>
+<span class="code-line">                <span class="code-string">f"currently healthy. System components are left alone unless they are actually "</span></span>
+<span class="code-line">                <span class="code-string">f"broken. If you believe it IS broken, show the failing state first "</span></span>
+<span class="code-line">                <span class="code-string">f"(describe_pod/get_pod_events) - the guard allows the write once the object is "</span></span>
+<span class="code-line">                <span class="code-string">f"not Running/Ready or is missing."</span></span>
+<span class="code-line">            )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Is the target in kube-system, kube-public, kube-node-lease, or the agent's own namespace?</p>
+              <p class="tl">Then go check its live health right now.</p>
+              <p class="tl">If it's definitely healthy...</p>
+              <p class="tl">...refuse, and explain why <strong>in words aimed at the AI</strong>:</p>
+              <p class="tl">what was blocked and where,</p>
+              <p class="tl">the rule ("leave healthy system parts alone"),</p>
+              <p class="tl">and exactly how to proceed legitimately:</p>
+              <p class="tl">prove it's broken first, and then the write is allowed.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">In an agent, error messages are prompts</strong>
+            <p>A human reads "Error 403" and investigates. A model reads the error and decides its next move. That's why these refusals say <em>why</em>, whether it's permanent ("This is permanent, not a transient error"), and what to do instead. Vague errors make agents retry the same wrong thing.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Prompts written as scar tissue</h2>
+        <p>The instructions to the model are long, and many rules end with a story: <em>"A real deployed test had this exact failure..."</em> Each one is a bug that happened, got diagnosed, and was turned into a rule.</p>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">Events ≠ now</code><span class="badge-desc">Stale events said a ConfigMap was missing. It existed. The agent "fixed" a non-problem. Rule: always read the live object.</span></div>
+          <div class="badge-item"><code class="badge-code">max-ns ≠ max</code><span class="badge-desc">A PVC was created in "default" instead of "max-ns" and reported as success. Rule: copy namespaces exactly; tools refuse to guess.</span></div>
+          <div class="badge-item"><code class="badge-code">Gone ≠ fixed</code><span class="badge-desc">A Pending standalone pod was deleted and reported "Fixed". Rule: a missing resource is never success.</span></div>
+          <div class="badge-item"><code class="badge-code">Role ≠ permission</code><span class="badge-desc">A Role listed the verb, but with the wrong apiGroup. Rule: verify RBAC with check_permission (a real "can-i" check).</span></div>
+        </div>
+
+        <p>To make "events are history" stick, <code>get_cluster_events</code> even looks up each event's object live and tags it <code>"GONE - object no longer exists, this event is stale"</code>. Code does what the prompt alone couldn't guarantee.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Spot the bug: when the docs lie to the AI</h2>
+        <p>Here's the list of kinds the write tools actually accept (<code>app/tools/kube.py</code>):</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/kube.py</span>
+            <pre><code><span class="code-line">_ALLOWED_KINDS = {</span>
+<span class="code-line">    <span class="code-string">"Pod"</span>, <span class="code-string">"Deployment"</span>, <span class="code-string">"Service"</span>, <span class="code-string">"ConfigMap"</span>, <span class="code-string">"PersistentVolumeClaim"</span>, <span class="code-string">"PersistentVolume"</span>,</span>
+<span class="code-line">    <span class="code-string">"Ingress"</span>, <span class="code-string">"Job"</span>, <span class="code-string">"CronJob"</span>, <span class="code-string">"StatefulSet"</span>, <span class="code-string">"DaemonSet"</span>, <span class="code-string">"Namespace"</span>,</span>
+<span class="code-line">    <span class="code-string">"StorageClass"</span>, <span class="code-string">"ReplicaSet"</span>, <span class="code-string">"HorizontalPodAutoscaler"</span>, <span class="code-string">"PodDisruptionBudget"</span>,</span>
+<span class="code-line">    <span class="code-string">"NetworkPolicy"</span>, <span class="code-string">"ServiceAccount"</span>, <span class="code-string">"Endpoints"</span>, <span class="code-string">"ResourceQuota"</span>, <span class="code-string">"LimitRange"</span>,</span>
+<span class="code-line">    <span class="code-string">"PriorityClass"</span>, <span class="code-string">"VolumeAttachment"</span>, <span class="code-string">"CustomResourceDefinition"</span>, <span class="code-string">"ReplicationController"</span>,</span>
+<span class="code-line">    <span class="code-string">"Role"</span>, <span class="code-string">"ClusterRole"</span>, <span class="code-string">"RoleBinding"</span>, <span class="code-string">"ClusterRoleBinding"</span>, <span class="code-string">"Secret"</span>,</span>
+<span class="code-line">    <span class="code-string">"Node"</span>,</span>
+<span class="code-line">}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">The set of resource kinds write tools may touch:</p>
+              <p class="tl">core workloads and storage,</p>
+              <p class="tl">jobs and controllers,</p>
+              <p class="tl">storage classes, autoscalers...</p>
+              <p class="tl">network and quota objects,</p>
+              <p class="tl">cluster-level extras,</p>
+              <p class="tl"><strong>RBAC objects and Secrets are allowed</strong>,</p>
+              <p class="tl">and Nodes (labels only; deleting is refused separately).</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Now here's the <code>apply_kubernetes_yaml</code> docstring, the text the AI reads. Click the line that will mislead it.</p>
+
+        <div class="bug-challenge">
+          <h3>Which line is wrong?</h3>
+          <div class="bug-code">
+            <div class="bug-line" data-line="1" onclick="checkBugLine(this, false)" data-hint="That's an accurate description of what the tool does. Keep reading."><span class="line-num">1</span><code>    Apply raw YAML configuration to the cluster (creates resources, or updates them if they</code></div>
+            <div class="bug-line" data-line="2" onclick="checkBugLine(this, false)" data-hint="True: it accepts multiple documents separated by ---."><span class="line-num">2</span><code>    already exist). The yaml_content parameter should contain one or more valid YAML manifests</code></div>
+            <div class="bug-line" data-line="3" onclick="checkBugLine(this, false)" data-hint="Fine so far. Compare the claims about WHICH kinds are allowed with the set above."><span class="line-num">3</span><code>    (separated by '---' for multiple documents). Covers common workload, storage, networking and</code></div>
+            <div class="bug-line" data-line="4" onclick="checkBugLine(this, false)" data-hint="All of these are in _ALLOWED_KINDS. Look further down."><span class="line-num">4</span><code>    policy kinds (Pod, Deployment, Service, ConfigMap, PVC, PersistentVolume, StorageClass,</code></div>
+            <div class="bug-line" data-line="5" onclick="checkBugLine(this, false)" data-hint="Still accurate. The contradiction comes right after."><span class="line-num">5</span><code>    Ingress, NetworkPolicy, Job, CronJob, StatefulSet, DaemonSet, HPA, PDB, ResourceQuota,</code></div>
+            <div class="bug-line bug-target" data-line="6" onclick="checkBugLine(this, true)" data-explanation="The docstring says Secrets and RBAC objects can never be created this way, but _ALLOWED_KINDS includes Role, ClusterRole, RoleBinding, ClusterRoleBinding and Secret, and the diagnose prompt says RBAC for other workloads is fully writable. The model reads the docstring, so it may refuse or route around a fix the code would happily allow. The refusal message in the same function repeats the stale claim too. In agent code, docs aren't comments. They're behaviour, and drift between them is a real bug."><span class="line-num">6</span><code>    LimitRange, Namespace, CRDs, ...) - Secrets and RBAC objects (Role/ClusterRole/Bindings) are</code></div>
+            <div class="bug-line" data-line="7" onclick="checkBugLine(this, false)" data-hint="This finishes the sentence from the line above. The sentence starts one line up."><span class="line-num">7</span><code>    never creatable/modifiable this way.</code></div>
+          </div>
+          <div class="bug-feedback"></div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">A related gap: not every refusal stops the retries</strong>
+            <p><code>apply_remediation</code> marks a result BLOCKED only when the text contains "is not in the allowed set". A guard refusal like "controls this agent's own permissions" doesn't match, so the loop can burn all 3 attempts on something that will never be allowed. When you ask AI to change refusal wording, ask it to check what code matches on that text.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module4">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>A standalone pod (no Deployment) is stuck in ImagePullBackOff. The AI's first move is <code>restart_pod</code>.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Right. _restart_would_not_help sees the ImagePullBackOff reason and refuses, explaining the fault is baked into the spec. The correct tool is update_pod_image, which patches the image in place without deleting the pod."
+                 data-explanation-wrong="Two guards stand in the way: restarts are refused for spec-baked errors like ImagePullBackOff, and standalone pods can't be deleted by a 'restart'. The fix is to change the image itself with update_pod_image.">
+              <h3 class="quiz-question">What happens, and what's the right fix?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The pod restarts and the problem goes away</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The tool refuses (a restart can't fix a bad image); the fix is update_pod_image</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The pod is deleted permanently</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You're adding a new write tool, <code>cordon_node</code>, so the agent can stop new pods landing on a sick node.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Exactly. The docstring is the AI's only instructions for when to use the tool, and the Python guard is the only thing that truly prevents misuse. Then register it in remedy_tools so only the apply step gets it."
+                 data-explanation-wrong="Think about the two audiences. The model learns when to use a tool from its docstring, and only Python code can reliably stop misuse. Both need care; a UI label does neither.">
+              <h3 class="quiz-question">Which two things matter most to get right?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The function name length and the log format</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A button in the UI and a new metric</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A precise docstring (when to use it, when not to) and a Python guard inside the tool (e.g. call check_write_allowed)</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. The verifier is told to ignore 'success' from the tool and re-read the live object, and events are explicitly called history. A tool saying 'Successfully deleted' proves the delete happened, not that the user's problem is solved."
+               data-explanation-wrong="Remember the scar-tissue rules: a tool's success message only proves the action ran. Verification has to look at the live object's current state, and 'it's gone' is never a fix unless deletion was the request.">
+            <h3 class="quiz-question">A fix reports "Successfully deleted Pod/web" and the verifier says GOAL_ACHIEVED: YES because "the failing pod is no longer present." Should you trust it?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. Deleting a broken thing isn't fixing it unless deletion was the request; check that a healthy replacement exists</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. The tool confirmed success</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes, as long as there are no new warning events</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-5" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Running It for Real</h1>
+      <p class="module-subtitle">The agent lives inside the cluster it fixes. Here's how it's housed, what it depends on, and where it tends to break.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The building and its keycards</h2>
+        <p>Picture an office building: each tenant has a locked suite, keycards decide who opens which doors, and smoke detectors report trouble to the front desk. The <code>k8s/</code> folder sets up exactly that for the agent. Click a component to see its job.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Namespace: ai-agent</h4>
+            <div class="arch-component" data-desc="ai-agent-frontend (Deployment + Service on port 3000): the Next.js chat UI. Its NetworkPolicy lets it talk only to the backend on port 8000, plus DNS.">
+              <div class="arch-icon">💬</div><span>Frontend pod</span>
+            </div>
+            <div class="arch-component" data-desc="ai-agent-backend (Deployment + Service on port 8000): FastAPI + LangGraph. Runs as non-root with a read-only filesystem, 250m-1 CPU and 256-512Mi memory. Health checked via /healthz and /readyz.">
+              <div class="arch-icon">🐍</div><span>Backend pod</span>
+            </div>
+            <div class="arch-component" data-desc="ai-agent-postgres: stores LangGraph checkpoints and conversation history so sessions survive restarts and are shared by every backend replica. Only the backend may connect, on port 5432.">
+              <div class="arch-icon">🐘</div><span>Postgres</span>
+            </div>
+            <div class="arch-component" data-desc="ServiceAccount 'ai-agent' bound to ClusterRole 'ai-agent': the backend's identity and keycard. It decides what the agent may read and change across the whole cluster.">
+              <div class="arch-icon">🪪</div><span>ServiceAccount + RBAC</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Outside the namespace</h4>
+            <div class="arch-component" data-desc="The Kubernetes API server: the backend calls it (in-cluster config) for every read and write tool. The rest of the cluster, every other namespace, is the patient.">
+              <div class="arch-icon">☸️</div><span>Kubernetes API</span>
+            </div>
+            <div class="arch-component" data-desc="AWS Bedrock (Amazon Nova Pro by default), reached over HTTPS port 443. Credentials come from EKS Pod Identity or, elsewhere, access keys in a Secret.">
+              <div class="arch-icon">☁️</div><span>AWS Bedrock</span>
+            </div>
+            <div class="arch-component" data-desc="Optional (commented out in kustomization.yaml): an nginx Ingress routing /api to the backend and / to the frontend, and a ServiceMonitor so Prometheus scrapes /metrics.">
+              <div class="arch-icon">🚪</div><span>Ingress + Prometheus</span>
+            </div>
+          </div>
+          <div class="arch-description">Click any component to learn what it does</div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The outside brain: two model settings</h2>
+        <p>Both specialists use Amazon Nova Pro by default, but with different
+          <span class="term" data-definition="Temperature controls how random a model's output is. 0.0 means 'always pick the most likely next word' (consistent, repeatable); higher values add variety and creativity.">temperature</span>. Model IDs come from environment variables, so swapping models needs no code change (but does need re-testing, as Module 2 showed).</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/infra/bedrock.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_diagnostics_model</span>():</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">ChatBedrockConverse</span>(</span>
+<span class="code-line">        client=bedrock_client,</span>
+<span class="code-line">        model_id=DIAGNOSTICS_MODEL_ID,</span>
+<span class="code-line">        temperature=<span class="code-number">0.0</span>,</span>
+<span class="code-line">    )</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_remediation_model</span>():</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">ChatBedrockConverse</span>(</span>
+<span class="code-line">        client=bedrock_client,</span>
+<span class="code-line">        model_id=REMEDIATION_MODEL_ID,</span>
+<span class="code-line">        temperature=<span class="code-number">0.2</span>,</span>
+<span class="code-line">    )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build the model used for diagnosing and verifying:</p>
+              <p class="tl">a Bedrock chat model...</p>
+              <p class="tl">...using the shared AWS connection,</p>
+              <p class="tl">...whichever model the config names,</p>
+              <p class="tl">...with zero randomness, because facts should come out the same every time.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Build the model used for planning and applying fixes:</p>
+              <p class="tl">same kind of model...</p>
+              <p class="tl">...same connection,</p>
+              <p class="tl">...its own configurable ID,</p>
+              <p class="tl">...with a little randomness, so a retry can come up with a <em>different</em> plan.</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">/api/usage</code><span class="badge-desc">Token counts and estimated cost per role, priced from *_MODEL_PRICE_*_PER_1K settings</span></div>
+          <div class="badge-item"><code class="badge-code">in-memory</code><span class="badge-desc">Usage totals live in the process: they reset on restart and each replica counts separately</span></div>
+          <div class="badge-item"><code class="badge-code">/metrics</code><span class="badge-desc"><span class="term" data-definition="Prometheus is a popular monitoring system. It visits each app's /metrics URL every few seconds, stores the numbers, and powers dashboards and alerts.">Prometheus</span> counters: agent_tool_calls_total, agent_llm_tokens_total, agent_remediation_outcomes_total</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Smoke detectors: health probes</h2>
+        <p>Kubernetes keeps asking the backend "are you OK?" using two <span class="term" data-definition="A probe is a check Kubernetes runs against a container on a schedule. A liveness probe failing means 'restart it'; a readiness probe failing means 'stop sending it traffic until it recovers'.">probes</span>. Liveness failing restarts the pod; readiness failing just stops sending it traffic.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/main.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@app.get</span>(<span class="code-string">"/readyz"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">readiness</span>():</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        k8s_client.<span class="code-function">CoreV1Api</span>().<span class="code-function">list_namespace</span>(limit=<span class="code-number">1</span>, _request_timeout=<span class="code-number">3</span>)</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> e:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">f"readiness check failed: kubernetes api unreachable: {e}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">503</span>, detail=<span class="code-string">f"kubernetes api unreachable: {e}"</span>)</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        bedrock_client.meta.region_name</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> e:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">f"readiness check failed: bedrock client misconfigured: {e}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">503</span>, detail=<span class="code-string">f"bedrock client misconfigured: {e}"</span>)</span>
+<span class="code-line">    <span class="code-keyword">return</span> {<span class="code-string">"status"</span>: <span class="code-string">"ready"</span>}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Answer Kubernetes' "ready for traffic?" check at <code>/readyz</code>.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Try a real, tiny request:</p>
+              <p class="tl">list one namespace, giving up after 3 seconds.</p>
+              <p class="tl">If that fails...</p>
+              <p class="tl">...log it...</p>
+              <p class="tl">...and answer 503 "not ready."</p>
+              <p class="tl">Then check Bedrock:</p>
+              <p class="tl">read the client's configured region. <strong>This never contacts AWS.</strong> It only proves the client object was built.</p>
+              <p class="tl">If even that fails...</p>
+              <p class="tl">...log it...</p>
+              <p class="tl">...and answer 503.</p>
+              <p class="tl">Otherwise: ready.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Read the code, not the README</strong>
+            <p>The README says <code>/readyz</code> "checks Kubernetes API and Bedrock client connectivity." The Kubernetes half is a real network call; the Bedrock half isn't. A pod can report Ready while every Bedrock call fails with bad credentials. Catching gaps like this, between what docs (or an AI) claim and what code does, is a core skill.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Keycards: RBAC and NetworkPolicy</h2>
+        <p><span class="term" data-definition="RBAC (Role-Based Access Control) is Kubernetes' permission system. A Role or ClusterRole lists allowed actions (verbs like get, list, delete) on resource types; a binding hands those permissions to a user or ServiceAccount.">RBAC</span> controls what the agent can do to the cluster;
+          <span class="term" data-definition="A NetworkPolicy is a firewall rule for pods: it lists which other pods or ports a pod may talk to. Anything not listed is blocked.">NetworkPolicy</span> controls who it can talk to over the network.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">k8s/manifests/rbac.yaml</span>
+            <pre><code><span class="code-line">  - <span class="code-property">apiGroups</span>: [<span class="code-string">""</span>]</span>
+<span class="code-line">    <span class="code-property">resources</span>: [<span class="code-string">"pods"</span>, <span class="code-string">"pods/log"</span>, <span class="code-string">"pods/status"</span>, <span class="code-string">"services"</span>, <span class="code-string">"configmaps"</span>, <span class="code-string">"nodes"</span>,</span>
+<span class="code-line">                <span class="code-string">"persistentvolumeclaims"</span>, <span class="code-string">"persistentvolumes"</span>, <span class="code-string">"namespaces"</span>, <span class="code-string">"events"</span>,</span>
+<span class="code-line">                <span class="code-string">"serviceaccounts"</span>, <span class="code-string">"endpoints"</span>, <span class="code-string">"resourcequotas"</span>, <span class="code-string">"limitranges"</span>,</span>
+<span class="code-line">                <span class="code-string">"replicationcontrollers"</span>, <span class="code-string">"podtemplates"</span>, <span class="code-string">"componentstatuses"</span>]</span>
+<span class="code-line">    <span class="code-property">verbs</span>: [<span class="code-string">"get"</span>, <span class="code-string">"list"</span>, <span class="code-string">"watch"</span>]</span>
+<span class="code-line"></span>
+<span class="code-line">  - <span class="code-property">apiGroups</span>: [<span class="code-string">"*"</span>]</span>
+<span class="code-line">    <span class="code-property">resources</span>: [<span class="code-string">"*"</span>]</span>
+<span class="code-line">    <span class="code-property">verbs</span>: [<span class="code-string">"create"</span>, <span class="code-string">"update"</span>, <span class="code-string">"patch"</span>, <span class="code-string">"delete"</span>]</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For the core resource types...</p>
+              <p class="tl">...allow reading pods, their logs, services, configmaps, nodes...</p>
+              <p class="tl">...storage, namespaces, events...</p>
+              <p class="tl">...and more. <strong>Notice "secrets" isn't here</strong>, so the agent can't read Secret values.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Read-only verbs.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">And for <em>every</em> API group...</p>
+              <p class="tl">...and <em>every</em> resource type...</p>
+              <p class="tl">...allow create, update, patch and delete. Very broad, so the Python guards from Module 4 are the real fine-grained safety layer.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">backend in</code><span class="badge-desc">Only from frontend pods, port 8000</span></div>
+          <div class="badge-item"><code class="badge-code">backend out</code><span class="badge-desc">Port 443 (Bedrock and, on EKS, the Kubernetes API), Postgres on 5432, DNS on 53</span></div>
+          <div class="badge-item"><code class="badge-code">postgres in</code><span class="badge-desc">Only from backend pods, port 5432</span></div>
+          <div class="badge-item"><code class="badge-code">frontend out</code><span class="badge-desc">Only to the backend, plus DNS</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where it breaks (and how to tell)</h2>
+        <p>These are the failure modes visible in the code and deploy notes. Each one has a fingerprint you can recognise.</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>Pod stuck in CreateContainerConfigError</strong><p><code>configmap.yaml</code> alone lacks AWS_REGION, the model IDs and REQUIRE_APPROVAL. Those are merged in by <span class="term" data-definition="Kustomize is a tool built into kubectl ('kubectl apply -k') that assembles Kubernetes YAML files and patches in per-environment values like image tags and config, without editing the originals.">Kustomize</span>'s configMapGenerator. Deploy with <code>kubectl apply -k k8s/</code>, not <code>-f manifests/</code>.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Pod exits immediately on start</strong><p><code>entrypoint.sh</code> runs a <span class="term" data-definition="A preflight check is a quick test a program runs before starting for real (are settings present? is the database reachable?) so it fails fast with a clear message instead of failing confusingly later.">preflight check</span>: missing required env vars, no in-cluster config, or an unreachable Postgres stops it with a clear message. Read <code>kubectl logs</code>.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Every Bedrock call fails with InvalidClientTokenId on EKS</strong><p>Access keys in the Secret override <span class="term" data-definition="EKS Pod Identity is an AWS feature that gives a pod an AWS role automatically, so no access keys need to be stored anywhere.">Pod Identity</span> in boto3's credential chain. Leave them commented out on EKS.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>list_secrets works locally but errors in the cluster</strong><p>Locally the backend uses <em>your</em> kubeconfig (often admin). In the cluster it uses the ServiceAccount, whose ClusterRole doesn't grant reading secrets, so the API answers 403 Forbidden.</p></div></div>
+          <div class="step-card"><div class="step-num">5</div><div class="step-body"><strong>Approve spins, then a gateway timeout</strong><p>Each request runs synchronously. With verify sleeping 15s and up to 3 attempts, one call can take minutes. If you enable the Ingress, its default proxy timeout (60s on ingress-nginx) may cut it off first.</p></div></div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🪞</div>
+          <div class="callout-content">
+            <strong class="callout-title">The agent could diagnose its own outage</strong>
+            <p>Failure #1 is exactly the kind of problem the agent is built to catch: a pod waiting on a missing ConfigMap key. But a guard keeps it out of its own namespace while things are healthy, and it can't reason at all while its own pod won't start. Some problems still need a human with kubectl.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module5">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>After deploying, the backend pod shows Ready, but every question in the chat fails with an AWS credentials error.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Exactly. /readyz only reads bedrock_client.meta.region_name, which never touches AWS. Ready proves the Kubernetes API works, not Bedrock. Next step: look for stray AWS keys overriding Pod Identity, or check the IAM role's bedrock:InvokeModel permission."
+                 data-explanation-wrong="Look at what /readyz actually does for Bedrock: it reads a local setting and never calls AWS. So 'Ready' tells you nothing about credentials. Investigate the credential chain instead.">
+              <h3 class="quiz-question">How can the pod be Ready if Bedrock is broken?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Kubernetes caches readiness for an hour</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The readiness check never actually calls Bedrock; it only checks the client object exists</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The NetworkPolicy is blocking the readiness probe</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You add a Slack notification: the backend should POST to hooks.slack.com when a fix succeeds. It works locally but times out in the cluster.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="a"
+                 data-explanation-right="Good instinct to check the network rules first. Slack is HTTPS on 443, which the backend egress allows, so check DNS resolution and any cluster-level egress firewall next. Either way, the NetworkPolicy is the first file to read when 'works locally, times out in cluster.'"
+                 data-explanation-wrong="'Works locally, times out in the cluster' is the classic fingerprint of a network rule. Start with the backend's NetworkPolicy egress list, then DNS and any cluster-level egress firewall.">
+              <h3 class="quiz-question">Where do you look first?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The backend NetworkPolicy's egress rules (and DNS / cluster egress)</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The ClusterRole in rbac.yaml</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The LangGraph checkpointer</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Right. Write access in rbac.yaml is a wildcard, so the precise rules (no self-RBAC, protected namespaces, no Bound PV deletes) live in Python. Narrowing RBAC as well would be defense in depth, at the cost of the agent being able to fix fewer things."
+               data-explanation-wrong="Re-read the write rule in rbac.yaml: apiGroups '*', resources '*'. Kubernetes itself would allow almost any change. The fine-grained protection is the Python guard layer from Module 4.">
+            <h3 class="quiz-question">A security reviewer asks: "What actually stops this agent from deleting a Deployment in kube-system?" What's the honest answer?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The ClusterRole doesn't allow deletes</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The NetworkPolicy blocks access to kube-system</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The human approval step, plus the Python guard that refuses writes to healthy objects in protected namespaces. RBAC itself allows it.</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+  </main>
+
+</body>
+</html>

@@ -1,0 +1,316 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Tools and Guardrails</h1>
+      <p class="module-subtitle">How an AI "uses" Kubernetes, and the safety interlocks that stop it from doing something dumb.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A tool is a function plus a description</h2>
+        <p>The model can't run code. What it gets is a menu: each <span class="term" data-definition="In AI agents, a tool is a normal function the model is allowed to request by name. The model says 'call describe_pod with pod_name=web-123', and your code runs it and hands back the result. This is also called 'function calling'.">tool</span>'s name, its arguments, and its
+          <span class="term" data-definition="A docstring is the text in triple quotes right under a Python function's name, describing what it does. In this project the docstring is sent to the AI as the tool's instructions, so it directly shapes the AI's behaviour.">docstring</span>. The
+          <span class="term" data-definition="A decorator is the @something line placed above a function. It wraps the function to give it extra powers. Here, @tool turns a plain function into something the AI can see and request.">decorator</span> <code>@tool</code> builds that menu entry automatically.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/read.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@tool</span></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">list_namespaces</span>() -&gt; str:</span>
+<span class="code-line">    <span class="code-comment">"""List all namespaces in the Kubernetes cluster."""</span></span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        v1 = client.<span class="code-function">CoreV1Api</span>()</span>
+<span class="code-line">        namespaces = v1.<span class="code-function">list_namespace</span>()</span>
+<span class="code-line">        ns_list = [ns.metadata.name <span class="code-keyword">for</span> ns <span class="code-keyword">in</span> namespaces.items]</span>
+<span class="code-line">        <span class="code-keyword">return</span> json.<span class="code-function">dumps</span>({<span class="code-string">"namespaces"</span>: ns_list})</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Put this function on the AI's menu.</p>
+              <p class="tl">Its name is what the AI asks for. It takes no arguments and returns text.</p>
+              <p class="tl">This sentence is literally what the AI reads to decide when to use it.</p>
+              <p class="tl">Try the following (and on failure, return an error message instead of crashing).</p>
+              <p class="tl">Get a handle on the Kubernetes "core" <span class="term" data-definition="An API (Application Programming Interface) is a set of requests one program can make to another. The Kubernetes API is how every tool, including kubectl, reads and changes the cluster.">API</span>.</p>
+              <p class="tl">Ask it for every <span class="term" data-definition="A namespace is a named folder inside a Kubernetes cluster that groups related resources, like 'shop-ns' or 'kube-system'. The same pod name can exist in two different namespaces.">namespace</span>.</p>
+              <p class="tl">Keep just the names.</p>
+              <p class="tl">Send them back as JSON text for the AI to read.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">👀</div>
+            <h4 class="pattern-title">24 read tools</h4>
+            <p class="pattern-desc"><code>diag_tools</code>: get_pod_logs, describe_pod, get_cluster_events, check_permission, get_resource (any kind)...</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">✍️</div>
+            <h4 class="pattern-title">11 write tools</h4>
+            <p class="pattern-desc"><code>remedy_tools</code>: patch_deployment, scale_deployment, apply_kubernetes_yaml, delete_resource...</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🔐</div>
+            <h4 class="pattern-title">Who gets what</h4>
+            <p class="pattern-desc">diagnose, propose and verify get only read tools. Only apply_remediation is handed both.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The ask-run-answer loop</h2>
+        <p>Every specialist runs the same short loop: ask the model, run whatever tools it requested, feed the results back, repeat. A hard cap (8 rounds for diagnosis) stops it from investigating forever.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">for</span> _ <span class="code-keyword">in</span> <span class="code-function">range</span>(limit):</span>
+<span class="code-line">        response = model_with_tools.<span class="code-function">invoke</span>(curr_messages)</span>
+<span class="code-line">        <span class="code-function">record_usage</span>(<span class="code-string">"diagnostics"</span>, response)</span>
+<span class="code-line">        curr_messages.<span class="code-function">append</span>(response)</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-keyword">if</span> response.tool_calls:</span>
+<span class="code-line">            <span class="code-keyword">for</span> tc <span class="code-keyword">in</span> response.tool_calls:</span>
+<span class="code-line">                tool_func = diag_tool_map.<span class="code-function">get</span>(tc[<span class="code-string">"name"</span>])</span>
+<span class="code-line">                <span class="code-keyword">if</span> tool_func:</span>
+<span class="code-line">                    logger.<span class="code-function">info</span>(<span class="code-string">f"tool_call diagnostics {tc['name']} args={tc['args']}"</span>)</span>
+<span class="code-line">                    result = <span class="code-function">invoke_tool_safely</span>(tool_func, tc[<span class="code-string">"args"</span>])</span>
+<span class="code-line">                    <span class="code-function">record_tool_call</span>(tc[<span class="code-string">"name"</span>], result)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Repeat at most <code>limit</code> times (8 here).</p>
+              <p class="tl">Send the whole conversation so far to the model.</p>
+              <p class="tl">Count the <span class="term" data-definition="A token is a chunk of text (roughly 3/4 of a word) that AI models read and write. Providers charge per token, so long prompts and long tool outputs cost real money.">tokens</span> it used, for the cost display.</p>
+              <p class="tl">Add its reply to the conversation.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Did it ask for any tools?</p>
+              <p class="tl">For each request...</p>
+              <p class="tl">...look the name up in the <strong>read-only</strong> tool list. (A write tool name simply won't be found here.)</p>
+              <p class="tl">If it's real...</p>
+              <p class="tl">...write a log line showing exactly what was asked for,</p>
+              <p class="tl">run it, turning any crash into an error message the model can read,</p>
+              <p class="tl">and count success/error for the metrics dashboard.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Made-up tool name?</strong><p>The code replies "Tool 'list_pods' does not exist... Your real available tools are: [...]" so the model can correct itself.</p></div></div>
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Hit the round limit?</strong><p>One last call: "You have reached your investigation limit... give your final diagnostic report now."</p></div></div>
+          <div class="step-card"><div class="step-num">!</div><div class="step-body"><strong>Apply step wrote text instead of calling a tool?</strong><p>"You did not call a tool, so NOTHING happened." And if it never calls one, the result is recorded as FAILED, not success.</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Safety interlocks in the write tools</h2>
+        <p>A table saw has a blade guard and a kill switch because a sharp tool plus a distracted operator is dangerous. The write tools carry the same kind of interlocks, written in Python so the model <em>can't</em> talk its way past them.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🪪</div>
+            <h4 class="pattern-title">No self-promotion</h4>
+            <p class="pattern-desc">Can't edit its own ServiceAccount, ClusterRole or bindings. That would let it grant itself more power.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🏛️</div>
+            <h4 class="pattern-title">System namespaces</h4>
+            <p class="pattern-desc">kube-system and friends: hands off while healthy, allowed only once something is confirmed broken.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🔁</div>
+            <h4 class="pattern-title">Pointless restarts</h4>
+            <p class="pattern-desc">Refuses to restart a pod failing with ImagePullBackOff or a missing ConfigMap. A fresh copy fails the same way.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🧍</div>
+            <h4 class="pattern-title">Orphan pods</h4>
+            <p class="pattern-desc">Won't delete a <span class="term" data-definition="A standalone pod has no owner (no Deployment or ReplicaSet behind it). If you delete it, nothing recreates it. It's simply gone.">standalone pod</span> unless <code>recreating=true</code>.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">💽</div>
+            <h4 class="pattern-title">Live storage</h4>
+            <p class="pattern-desc">Refuses to delete a Bound <span class="term" data-definition="A PersistentVolume (PV) is a piece of real disk storage in the cluster. A PersistentVolumeClaim (PVC) is an app's request for storage; when matched, the PV is 'Bound' to it.">PersistentVolume</span>, and won't delete Nodes at all.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-text-secondary)">
+            <div class="pattern-icon" style="background: var(--color-text-secondary)">📍</div>
+            <h4 class="pattern-title">No guessing "default"</h4>
+            <p class="pattern-desc">Namespaced writes without a namespace are refused instead of silently landing in the wrong place.</p>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/guards.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> namespace <span class="code-keyword">in</span> PROTECTED_NAMESPACES:</span>
+<span class="code-line">        unhealthy = <span class="code-function">_target_is_unhealthy</span>(kind, name, namespace)</span>
+<span class="code-line">        <span class="code-keyword">if</span> unhealthy <span class="code-keyword">is</span> <span class="code-keyword">False</span>:</span>
+<span class="code-line">            <span class="code-keyword">return</span> (</span>
+<span class="code-line">                <span class="code-string">f"REFUSED: {kind}/{name} is in the protected system namespace '{namespace}' and is "</span></span>
+<span class="code-line">                <span class="code-string">f"currently healthy. System components are left alone unless they are actually "</span></span>
+<span class="code-line">                <span class="code-string">f"broken. If you believe it IS broken, show the failing state first "</span></span>
+<span class="code-line">                <span class="code-string">f"(describe_pod/get_pod_events) - the guard allows the write once the object is "</span></span>
+<span class="code-line">                <span class="code-string">f"not Running/Ready or is missing."</span></span>
+<span class="code-line">            )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Is the target in kube-system, kube-public, kube-node-lease, or the agent's own namespace?</p>
+              <p class="tl">Then go check its live health right now.</p>
+              <p class="tl">If it's definitely healthy...</p>
+              <p class="tl">...refuse, and explain why <strong>in words aimed at the AI</strong>:</p>
+              <p class="tl">what was blocked and where,</p>
+              <p class="tl">the rule ("leave healthy system parts alone"),</p>
+              <p class="tl">and exactly how to proceed legitimately:</p>
+              <p class="tl">prove it's broken first, and then the write is allowed.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">In an agent, error messages are prompts</strong>
+            <p>A human reads "Error 403" and investigates. A model reads the error and decides its next move. That's why these refusals say <em>why</em>, whether it's permanent ("This is permanent, not a transient error"), and what to do instead. Vague errors make agents retry the same wrong thing.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Prompts written as scar tissue</h2>
+        <p>The instructions to the model are long, and many rules end with a story: <em>"A real deployed test had this exact failure..."</em> Each one is a bug that happened, got diagnosed, and was turned into a rule.</p>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">Events ≠ now</code><span class="badge-desc">Stale events said a ConfigMap was missing. It existed. The agent "fixed" a non-problem. Rule: always read the live object.</span></div>
+          <div class="badge-item"><code class="badge-code">max-ns ≠ max</code><span class="badge-desc">A PVC was created in "default" instead of "max-ns" and reported as success. Rule: copy namespaces exactly; tools refuse to guess.</span></div>
+          <div class="badge-item"><code class="badge-code">Gone ≠ fixed</code><span class="badge-desc">A Pending standalone pod was deleted and reported "Fixed". Rule: a missing resource is never success.</span></div>
+          <div class="badge-item"><code class="badge-code">Role ≠ permission</code><span class="badge-desc">A Role listed the verb, but with the wrong apiGroup. Rule: verify RBAC with check_permission (a real "can-i" check).</span></div>
+        </div>
+
+        <p>To make "events are history" stick, <code>get_cluster_events</code> even looks up each event's object live and tags it <code>"GONE - object no longer exists, this event is stale"</code>. Code does what the prompt alone couldn't guarantee.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Spot the bug: when the docs lie to the AI</h2>
+        <p>Here's the list of kinds the write tools actually accept (<code>app/tools/kube.py</code>):</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/tools/kube.py</span>
+            <pre><code><span class="code-line">_ALLOWED_KINDS = {</span>
+<span class="code-line">    <span class="code-string">"Pod"</span>, <span class="code-string">"Deployment"</span>, <span class="code-string">"Service"</span>, <span class="code-string">"ConfigMap"</span>, <span class="code-string">"PersistentVolumeClaim"</span>, <span class="code-string">"PersistentVolume"</span>,</span>
+<span class="code-line">    <span class="code-string">"Ingress"</span>, <span class="code-string">"Job"</span>, <span class="code-string">"CronJob"</span>, <span class="code-string">"StatefulSet"</span>, <span class="code-string">"DaemonSet"</span>, <span class="code-string">"Namespace"</span>,</span>
+<span class="code-line">    <span class="code-string">"StorageClass"</span>, <span class="code-string">"ReplicaSet"</span>, <span class="code-string">"HorizontalPodAutoscaler"</span>, <span class="code-string">"PodDisruptionBudget"</span>,</span>
+<span class="code-line">    <span class="code-string">"NetworkPolicy"</span>, <span class="code-string">"ServiceAccount"</span>, <span class="code-string">"Endpoints"</span>, <span class="code-string">"ResourceQuota"</span>, <span class="code-string">"LimitRange"</span>,</span>
+<span class="code-line">    <span class="code-string">"PriorityClass"</span>, <span class="code-string">"VolumeAttachment"</span>, <span class="code-string">"CustomResourceDefinition"</span>, <span class="code-string">"ReplicationController"</span>,</span>
+<span class="code-line">    <span class="code-string">"Role"</span>, <span class="code-string">"ClusterRole"</span>, <span class="code-string">"RoleBinding"</span>, <span class="code-string">"ClusterRoleBinding"</span>, <span class="code-string">"Secret"</span>,</span>
+<span class="code-line">    <span class="code-string">"Node"</span>,</span>
+<span class="code-line">}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">The set of resource kinds write tools may touch:</p>
+              <p class="tl">core workloads and storage,</p>
+              <p class="tl">jobs and controllers,</p>
+              <p class="tl">storage classes, autoscalers...</p>
+              <p class="tl">network and quota objects,</p>
+              <p class="tl">cluster-level extras,</p>
+              <p class="tl"><strong>RBAC objects and Secrets are allowed</strong>,</p>
+              <p class="tl">and Nodes (labels only; deleting is refused separately).</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Now here's the <code>apply_kubernetes_yaml</code> docstring, the text the AI reads. Click the line that will mislead it.</p>
+
+        <div class="bug-challenge">
+          <h3>Which line is wrong?</h3>
+          <div class="bug-code">
+            <div class="bug-line" data-line="1" onclick="checkBugLine(this, false)" data-hint="That's an accurate description of what the tool does. Keep reading."><span class="line-num">1</span><code>    Apply raw YAML configuration to the cluster (creates resources, or updates them if they</code></div>
+            <div class="bug-line" data-line="2" onclick="checkBugLine(this, false)" data-hint="True: it accepts multiple documents separated by ---."><span class="line-num">2</span><code>    already exist). The yaml_content parameter should contain one or more valid YAML manifests</code></div>
+            <div class="bug-line" data-line="3" onclick="checkBugLine(this, false)" data-hint="Fine so far. Compare the claims about WHICH kinds are allowed with the set above."><span class="line-num">3</span><code>    (separated by '---' for multiple documents). Covers common workload, storage, networking and</code></div>
+            <div class="bug-line" data-line="4" onclick="checkBugLine(this, false)" data-hint="All of these are in _ALLOWED_KINDS. Look further down."><span class="line-num">4</span><code>    policy kinds (Pod, Deployment, Service, ConfigMap, PVC, PersistentVolume, StorageClass,</code></div>
+            <div class="bug-line" data-line="5" onclick="checkBugLine(this, false)" data-hint="Still accurate. The contradiction comes right after."><span class="line-num">5</span><code>    Ingress, NetworkPolicy, Job, CronJob, StatefulSet, DaemonSet, HPA, PDB, ResourceQuota,</code></div>
+            <div class="bug-line bug-target" data-line="6" onclick="checkBugLine(this, true)" data-explanation="The docstring says Secrets and RBAC objects can never be created this way, but _ALLOWED_KINDS includes Role, ClusterRole, RoleBinding, ClusterRoleBinding and Secret, and the diagnose prompt says RBAC for other workloads is fully writable. The model reads the docstring, so it may refuse or route around a fix the code would happily allow. The refusal message in the same function repeats the stale claim too. In agent code, docs aren't comments. They're behaviour, and drift between them is a real bug."><span class="line-num">6</span><code>    LimitRange, Namespace, CRDs, ...) - Secrets and RBAC objects (Role/ClusterRole/Bindings) are</code></div>
+            <div class="bug-line" data-line="7" onclick="checkBugLine(this, false)" data-hint="This finishes the sentence from the line above. The sentence starts one line up."><span class="line-num">7</span><code>    never creatable/modifiable this way.</code></div>
+          </div>
+          <div class="bug-feedback"></div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">A related gap: not every refusal stops the retries</strong>
+            <p><code>apply_remediation</code> marks a result BLOCKED only when the text contains "is not in the allowed set". A guard refusal like "controls this agent's own permissions" doesn't match, so the loop can burn all 3 attempts on something that will never be allowed. When you ask AI to change refusal wording, ask it to check what code matches on that text.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module4">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>A standalone pod (no Deployment) is stuck in ImagePullBackOff. The AI's first move is <code>restart_pod</code>.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Right. _restart_would_not_help sees the ImagePullBackOff reason and refuses, explaining the fault is baked into the spec. The correct tool is update_pod_image, which patches the image in place without deleting the pod."
+                 data-explanation-wrong="Two guards stand in the way: restarts are refused for spec-baked errors like ImagePullBackOff, and standalone pods can't be deleted by a 'restart'. The fix is to change the image itself with update_pod_image.">
+              <h3 class="quiz-question">What happens, and what's the right fix?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The pod restarts and the problem goes away</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The tool refuses (a restart can't fix a bad image); the fix is update_pod_image</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The pod is deleted permanently</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You're adding a new write tool, <code>cordon_node</code>, so the agent can stop new pods landing on a sick node.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Exactly. The docstring is the AI's only instructions for when to use the tool, and the Python guard is the only thing that truly prevents misuse. Then register it in remedy_tools so only the apply step gets it."
+                 data-explanation-wrong="Think about the two audiences. The model learns when to use a tool from its docstring, and only Python code can reliably stop misuse. Both need care; a UI label does neither.">
+              <h3 class="quiz-question">Which two things matter most to get right?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The function name length and the log format</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A button in the UI and a new metric</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A precise docstring (when to use it, when not to) and a Python guard inside the tool (e.g. call check_write_allowed)</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. The verifier is told to ignore 'success' from the tool and re-read the live object, and events are explicitly called history. A tool saying 'Successfully deleted' proves the delete happened, not that the user's problem is solved."
+               data-explanation-wrong="Remember the scar-tissue rules: a tool's success message only proves the action ran. Verification has to look at the live object's current state, and 'it's gone' is never a fix unless deletion was the request.">
+            <h3 class="quiz-question">A fix reports "Successfully deleted Pod/web" and the verifier says GOAL_ACHIEVED: YES because "the failing pod is no longer present." Should you trust it?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. Deleting a broken thing isn't fixing it unless deletion was the request; check that a healthy replacement exists</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. The tool confirmed success</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes, as long as there are no new warning events</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

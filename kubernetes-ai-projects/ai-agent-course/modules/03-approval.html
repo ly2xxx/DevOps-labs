@@ -1,0 +1,290 @@
+<section class="module" id="module-3" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Pausing for a Human</h1>
+      <p class="module-subtitle">How an investigation freezes mid-flight, waits for your click, and picks up exactly where it stopped.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The save point</h2>
+        <p>In a video game you hit a save point, switch off the console, and the next day you're standing in the same room with the same inventory. This agent does the same thing between "here's my proposed fix" and your Approve click, which might come seconds or hours later.</p>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p>Agent runs until it reaches a guarded step</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p>Whole state saved under the session's <code>thread_id</code></p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>HTTP request finishes; you see Approve / Reject</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">4</div><p>Your click loads the save and continues</p></div>
+        </div>
+
+        <p>The "save" is called a <span class="term" data-definition="A checkpoint is a saved snapshot of the agent's entire state at a moment in time. LangGraph writes one after every step so a paused run can be resumed later, even by a different server process.">checkpoint</span>, and the thing that stores it is the <span class="term" data-definition="The checkpointer is the storage backend LangGraph uses for checkpoints: either plain memory inside the running program, or a real database like Postgres.">checkpointer</span>.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where the pauses are declared</h2>
+        <p>One line decides which boxes need a human's permission before they run.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/graph.py</span>
+            <pre><code><span class="code-line">checkpointer = <span class="code-function">build_checkpointer</span>()</span>
+<span class="code-line">compiled_graph = workflow.<span class="code-function">compile</span>(</span>
+<span class="code-line">    checkpointer=checkpointer,</span>
+<span class="code-line">    interrupt_before=[<span class="code-string">"select_issues"</span>, <span class="code-string">"apply_remediation"</span>, <span class="code-string">"propose_retry"</span>] <span class="code-keyword">if</span> REQUIRE_APPROVAL <span class="code-keyword">else</span> [],</span>
+<span class="code-line">)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Set up storage for save points (database or memory; see next screen).</p>
+              <p class="tl">Turn the flowchart into a runnable program...</p>
+              <p class="tl">...that saves its state after every step...</p>
+              <p class="tl">...and <strong>stops just before</strong> triage, applying a fix, or retrying, but only if approval is required. If <code>REQUIRE_APPROVAL</code> is "false", the list is empty and it never stops.</p>
+              <p class="tl">Done.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">One environment variable removes the human</strong>
+            <p>Set <code>REQUIRE_APPROVAL=false</code> and <code>/api/query</code> runs diagnose → fix → verify in a single request, with an AI changing your cluster unsupervised. The deploy guide says to leave it <code>"true"</code>. When an AI suggests "just flip this flag to simplify," you now know what it costs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where the save file lives</h2>
+        <p>The checkpointer picks its storage based on one
+          <span class="term" data-definition="An environment variable is a setting handed to a program from outside, like DATABASE_URL=postgresql://... . It lets the same code behave differently on your laptop vs. in production without editing the code.">environment variable</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/infra/checkpointer.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">build_checkpointer</span>():</span>
+<span class="code-line">    database_url = os.<span class="code-function">getenv</span>(<span class="code-string">"DATABASE_URL"</span>)</span>
+<span class="code-line">    <span class="code-keyword">if not</span> database_url:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">"DATABASE_URL not set - using in-process MemorySaver (state lost on restart, not shared across replicas)."</span>)</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-function">MemorySaver</span>()</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Decide where to keep save points.</p>
+              <p class="tl">Is there a database address configured?</p>
+              <p class="tl">If not...</p>
+              <p class="tl">...log a loud warning: saves live only in this one program's memory. A restart wipes them, and a second copy of the server can't see them.</p>
+              <p class="tl">Use the in-memory store. (Otherwise the rest of the function connects to <span class="term" data-definition="Postgres (PostgreSQL) is a popular, free, rock-solid database. Here it stores checkpoints and chat history so they survive restarts and are shared between server copies.">Postgres</span> through a <span class="term" data-definition="A connection pool keeps a handful of database connections open and lends them out, instead of opening a fresh connection for every request, which is slow.">connection pool</span>.)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🧠</div>
+            <h4 class="pattern-title">MemorySaver</h4>
+            <p class="pattern-desc">Fine on your laptop. Lost on restart. Invisible to other <span class="term" data-definition="A replica is one running copy of the same program. Running 2 replicas means two identical servers sharing the traffic, so one can die without an outage.">replicas</span>.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">🐘</div>
+            <h4 class="pattern-title">PostgresSaver</h4>
+            <p class="pattern-desc">Survives restarts. Any replica can resume any session. Needed in production.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The approve-apply-verify loop</h2>
+        <p>Step through what happens after you click Approve on a fix that doesn't work the first time.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m3you","label":"You click Approve. The UI POSTs session_id + approved=true to /api/decision."},
+          {"highlight":"flow-m3store","label":"The backend loads the save point for that thread_id and sets approval_status to approved.","packet":true,"from":"m3you","to":"m3store"},
+          {"highlight":"flow-m3apply","label":"invoke(None) resumes the graph. apply_remediation calls a write tool. attempt becomes 1.","packet":true,"from":"m3store","to":"m3apply"},
+          {"highlight":"flow-m3verify","label":"verify waits 15s, re-reads the cluster: still broken. GOAL_ACHIEVED: NO.","packet":true,"from":"m3apply","to":"m3verify"},
+          {"highlight":"flow-m3store","label":"Router says: not blocked, attempts left, so pause before propose_retry. What failed is added to retry_context.","packet":true,"from":"m3verify","to":"m3store"},
+          {"highlight":"flow-m3apply","label":"Inside the same request, the backend runs propose_retry and auto-approves the new plan.","packet":true,"from":"m3store","to":"m3apply"},
+          {"highlight":"flow-m3verify","label":"Verify again. Success, or another round until attempt reaches MAX_REMEDIATION_ATTEMPTS (3).","packet":true,"from":"m3apply","to":"m3verify"},
+          {"highlight":"flow-m3you","label":"One response comes back with the final result and the full attempt_history.","packet":true,"from":"m3verify","to":"m3you"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m3you"><div class="flow-actor-icon">👤</div><span>You + UI</span></div>
+            <div class="flow-actor" id="flow-m3store"><div class="flow-actor-icon">💾</div><span>Checkpoint</span></div>
+            <div class="flow-actor" id="flow-m3apply"><div class="flow-actor-icon">🛠️</div><span>apply</span></div>
+            <div class="flow-actor" id="flow-m3verify"><div class="flow-actor-icon">🩺</div><span>verify</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/main.py (inside submit_decision)</span>
+            <pre><code><span class="code-line">        <span class="code-keyword">if</span> <span class="code-string">"apply_remediation"</span> <span class="code-keyword">in</span> next_nodes:</span>
+<span class="code-line">            compiled_graph.<span class="code-function">update_state</span>(config, {<span class="code-string">"approval_status"</span>: <span class="code-string">"approved"</span>})</span>
+<span class="code-line">            output_state = compiled_graph.<span class="code-function">invoke</span>(<span class="code-keyword">None</span>, config)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the graph is paused right before applying a (retry) fix...</p>
+              <p class="tl">...stamp the chart "approved" on the human's behalf...</p>
+              <p class="tl">...and resume. <code>None</code> means "no new input, continue from the save."</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">One click can authorize several different fixes</strong>
+            <p>The graph pauses before each retry, but <code>/api/decision</code> loops and approves those retries itself. So your one Approve covers the first plan <em>and</em> up to two follow-up plans you never read. That's a product decision, not a bug, but it's exactly the kind of detail to check before trusting an agent with production.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Belt and braces</h2>
+        <p>Even if something resumed the graph without your approval, the apply step checks the chart itself before touching anything:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py (apply_remediation_node)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> REQUIRE_APPROVAL <span class="code-keyword">and</span> state.<span class="code-function">get</span>(<span class="code-string">"approval_status"</span>) != <span class="code-string">"approved"</span>:</span>
+<span class="code-line">        <span class="code-keyword">return</span> {</span>
+<span class="code-line">            <span class="code-string">"messages"</span>: [<span class="code-function">AIMessage</span>(content=<span class="code-string">"Remediation was not approved. Skipping fix execution."</span>)],</span>
+<span class="code-line">            <span class="code-string">"fix_result"</span>: <span class="code-string">"Skipped (not approved)"</span></span>
+<span class="code-line">        }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If approval is required and the chart doesn't say "approved"...</p>
+              <p class="tl">...don't do anything. Instead return:</p>
+              <p class="tl">a note for the conversation saying it was skipped,</p>
+              <p class="tl">and a result the verifier recognises as "nothing happened."</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Engineers call this <span class="term" data-definition="Defense in depth means stacking several independent safety checks, so that if one fails or is bypassed, another still catches the problem. Like a seatbelt plus an airbag.">defense in depth</span>. The pause is the first lock; this check is the second.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">When to stop retrying</h2>
+        <p>After every verification, a router picks one of four outcomes and counts it as a
+          <span class="term" data-definition="A metric is a number a program publishes about itself (requests served, errors, seconds spent) so dashboards and alerts can track it over time.">metric</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">route_after_verify</span>(state: AgentState) -&gt; str:</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"goal_achieved"</span>):</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"succeeded"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"blocked"</span>):</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"blocked"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"attempt"</span>, <span class="code-number">0</span>) &gt;= MAX_ATTEMPTS:</span>
+<span class="code-line">        REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"exhausted"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    REMEDIATION_OUTCOMES.<span class="code-function">labels</span>(outcome=<span class="code-string">"retrying"</span>).<span class="code-function">inc</span>()</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"propose_retry"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">After verifying, decide what's next.</p>
+              <p class="tl">Fixed?</p>
+              <p class="tl">Count a "succeeded"...</p>
+              <p class="tl">...and stop.</p>
+              <p class="tl">Was the action refused by a hard rule?</p>
+              <p class="tl">Count "blocked"...</p>
+              <p class="tl">...and stop, because trying again would be refused identically.</p>
+              <p class="tl">Out of attempts (default 3)?</p>
+              <p class="tl">Count "exhausted"...</p>
+              <p class="tl">...and stop.</p>
+              <p class="tl">Otherwise count a "retrying"...</p>
+              <p class="tl">...and go draft a new plan, with notes on what already failed.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">retry_context</code><span class="badge-desc">"--- Attempt 1 --- Applied: ... Verification: ..." so the next plan avoids repeating a failure</span></div>
+          <div class="badge-item"><code class="badge-code">/api/guidance</code><span class="badge-desc">Adds "--- Human guidance for the next attempt ---" which the planner is told overrides its own judgment</span></div>
+          <div class="badge-item"><code class="badge-code">conversation_history</code><span class="badge-desc">Past turns are stored labelled "[earlier reply - historical, may be out of date]" so old refusals aren't repeated</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module3">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>To handle more traffic, you scale the backend to 2 replicas. You forgot to set DATABASE_URL. Now Approve sometimes fails with 404 "Unknown or already-completed session_id."</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Spot on. With MemorySaver, each replica keeps its own private save points. If the question hit replica A and the Approve click lands on replica B, B has never heard of that session. Postgres-backed checkpoints fix it."
+                 data-explanation-wrong="Think about where the save point physically lives. With no DATABASE_URL it's inside one process's memory, and the other replica can't see it.">
+              <h3 class="quiz-question">What's the root cause?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The session expired because you waited too long</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Each replica has its own in-memory checkpoints, and the click reached the other one</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Bedrock lost the conversation</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>The first fix fails. Attempt 2 tries the exact same refused action again, and so does attempt 3.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Right. A refusal starting with BLOCKED sets blocked=True, and the router stops immediately. If a refusal message doesn't trigger that path, the loop keeps trying. Check how apply_remediation classifies the tool's result."
+                 data-explanation-wrong="The design already has an escape hatch for 'this will never work': the blocked flag. If retries repeat a refused action, the question is why that flag wasn't set.">
+              <h3 class="quiz-question">Which part of the design should have stopped this early?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The checkpointer</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Next.js proxy</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The "blocked" flag, which makes route_after_verify end instead of retrying</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Adding a pause means adding the node name to interrupt_before, and then making /api/decision stop auto-approving retries, so the UI can show each new plan. Both halves matter."
+               data-explanation-wrong="The graph already pauses before propose_retry and apply_remediation. The reason you don't see each retry is that /api/decision's loop approves them itself. That loop is what needs changing.">
+            <h3 class="quiz-question">Your team wants a human to approve <em>every</em> retry plan individually. What needs to change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Stop the /api/decision loop from auto-approving, and return the new proposal to the UI instead</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Set REQUIRE_APPROVAL=false</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Lower MAX_REMEDIATION_ATTEMPTS to 1</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

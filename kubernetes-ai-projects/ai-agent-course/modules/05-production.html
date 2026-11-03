@@ -1,0 +1,269 @@
+<section class="module" id="module-5" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Running It for Real</h1>
+      <p class="module-subtitle">The agent lives inside the cluster it fixes. Here's how it's housed, what it depends on, and where it tends to break.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The building and its keycards</h2>
+        <p>Picture an office building: each tenant has a locked suite, keycards decide who opens which doors, and smoke detectors report trouble to the front desk. The <code>k8s/</code> folder sets up exactly that for the agent. Click a component to see its job.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Namespace: ai-agent</h4>
+            <div class="arch-component" data-desc="ai-agent-frontend (Deployment + Service on port 3000): the Next.js chat UI. Its NetworkPolicy lets it talk only to the backend on port 8000, plus DNS.">
+              <div class="arch-icon">💬</div><span>Frontend pod</span>
+            </div>
+            <div class="arch-component" data-desc="ai-agent-backend (Deployment + Service on port 8000): FastAPI + LangGraph. Runs as non-root with a read-only filesystem, 250m-1 CPU and 256-512Mi memory. Health checked via /healthz and /readyz.">
+              <div class="arch-icon">🐍</div><span>Backend pod</span>
+            </div>
+            <div class="arch-component" data-desc="ai-agent-postgres: stores LangGraph checkpoints and conversation history so sessions survive restarts and are shared by every backend replica. Only the backend may connect, on port 5432.">
+              <div class="arch-icon">🐘</div><span>Postgres</span>
+            </div>
+            <div class="arch-component" data-desc="ServiceAccount 'ai-agent' bound to ClusterRole 'ai-agent': the backend's identity and keycard. It decides what the agent may read and change across the whole cluster.">
+              <div class="arch-icon">🪪</div><span>ServiceAccount + RBAC</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Outside the namespace</h4>
+            <div class="arch-component" data-desc="The Kubernetes API server: the backend calls it (in-cluster config) for every read and write tool. The rest of the cluster, every other namespace, is the patient.">
+              <div class="arch-icon">☸️</div><span>Kubernetes API</span>
+            </div>
+            <div class="arch-component" data-desc="AWS Bedrock (Amazon Nova Pro by default), reached over HTTPS port 443. Credentials come from EKS Pod Identity or, elsewhere, access keys in a Secret.">
+              <div class="arch-icon">☁️</div><span>AWS Bedrock</span>
+            </div>
+            <div class="arch-component" data-desc="Optional (commented out in kustomization.yaml): an nginx Ingress routing /api to the backend and / to the frontend, and a ServiceMonitor so Prometheus scrapes /metrics.">
+              <div class="arch-icon">🚪</div><span>Ingress + Prometheus</span>
+            </div>
+          </div>
+          <div class="arch-description">Click any component to learn what it does</div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The outside brain: two model settings</h2>
+        <p>Both specialists use Amazon Nova Pro by default, but with different
+          <span class="term" data-definition="Temperature controls how random a model's output is. 0.0 means 'always pick the most likely next word' (consistent, repeatable); higher values add variety and creativity.">temperature</span>. Model IDs come from environment variables, so swapping models needs no code change (but does need re-testing, as Module 2 showed).</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/infra/bedrock.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_diagnostics_model</span>():</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">ChatBedrockConverse</span>(</span>
+<span class="code-line">        client=bedrock_client,</span>
+<span class="code-line">        model_id=DIAGNOSTICS_MODEL_ID,</span>
+<span class="code-line">        temperature=<span class="code-number">0.0</span>,</span>
+<span class="code-line">    )</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_remediation_model</span>():</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">ChatBedrockConverse</span>(</span>
+<span class="code-line">        client=bedrock_client,</span>
+<span class="code-line">        model_id=REMEDIATION_MODEL_ID,</span>
+<span class="code-line">        temperature=<span class="code-number">0.2</span>,</span>
+<span class="code-line">    )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build the model used for diagnosing and verifying:</p>
+              <p class="tl">a Bedrock chat model...</p>
+              <p class="tl">...using the shared AWS connection,</p>
+              <p class="tl">...whichever model the config names,</p>
+              <p class="tl">...with zero randomness, because facts should come out the same every time.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Build the model used for planning and applying fixes:</p>
+              <p class="tl">same kind of model...</p>
+              <p class="tl">...same connection,</p>
+              <p class="tl">...its own configurable ID,</p>
+              <p class="tl">...with a little randomness, so a retry can come up with a <em>different</em> plan.</p>
+              <p class="tl">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">/api/usage</code><span class="badge-desc">Token counts and estimated cost per role, priced from *_MODEL_PRICE_*_PER_1K settings</span></div>
+          <div class="badge-item"><code class="badge-code">in-memory</code><span class="badge-desc">Usage totals live in the process: they reset on restart and each replica counts separately</span></div>
+          <div class="badge-item"><code class="badge-code">/metrics</code><span class="badge-desc"><span class="term" data-definition="Prometheus is a popular monitoring system. It visits each app's /metrics URL every few seconds, stores the numbers, and powers dashboards and alerts.">Prometheus</span> counters: agent_tool_calls_total, agent_llm_tokens_total, agent_remediation_outcomes_total</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Smoke detectors: health probes</h2>
+        <p>Kubernetes keeps asking the backend "are you OK?" using two <span class="term" data-definition="A probe is a check Kubernetes runs against a container on a schedule. A liveness probe failing means 'restart it'; a readiness probe failing means 'stop sending it traffic until it recovers'.">probes</span>. Liveness failing restarts the pod; readiness failing just stops sending it traffic.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/main.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@app.get</span>(<span class="code-string">"/readyz"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">readiness</span>():</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        k8s_client.<span class="code-function">CoreV1Api</span>().<span class="code-function">list_namespace</span>(limit=<span class="code-number">1</span>, _request_timeout=<span class="code-number">3</span>)</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> e:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">f"readiness check failed: kubernetes api unreachable: {e}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">503</span>, detail=<span class="code-string">f"kubernetes api unreachable: {e}"</span>)</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        bedrock_client.meta.region_name</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> e:</span>
+<span class="code-line">        logger.<span class="code-function">warning</span>(<span class="code-string">f"readiness check failed: bedrock client misconfigured: {e}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">503</span>, detail=<span class="code-string">f"bedrock client misconfigured: {e}"</span>)</span>
+<span class="code-line">    <span class="code-keyword">return</span> {<span class="code-string">"status"</span>: <span class="code-string">"ready"</span>}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Answer Kubernetes' "ready for traffic?" check at <code>/readyz</code>.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Try a real, tiny request:</p>
+              <p class="tl">list one namespace, giving up after 3 seconds.</p>
+              <p class="tl">If that fails...</p>
+              <p class="tl">...log it...</p>
+              <p class="tl">...and answer 503 "not ready."</p>
+              <p class="tl">Then check Bedrock:</p>
+              <p class="tl">read the client's configured region. <strong>This never contacts AWS.</strong> It only proves the client object was built.</p>
+              <p class="tl">If even that fails...</p>
+              <p class="tl">...log it...</p>
+              <p class="tl">...and answer 503.</p>
+              <p class="tl">Otherwise: ready.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Read the code, not the README</strong>
+            <p>The README says <code>/readyz</code> "checks Kubernetes API and Bedrock client connectivity." The Kubernetes half is a real network call; the Bedrock half isn't. A pod can report Ready while every Bedrock call fails with bad credentials. Catching gaps like this, between what docs (or an AI) claim and what code does, is a core skill.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Keycards: RBAC and NetworkPolicy</h2>
+        <p><span class="term" data-definition="RBAC (Role-Based Access Control) is Kubernetes' permission system. A Role or ClusterRole lists allowed actions (verbs like get, list, delete) on resource types; a binding hands those permissions to a user or ServiceAccount.">RBAC</span> controls what the agent can do to the cluster;
+          <span class="term" data-definition="A NetworkPolicy is a firewall rule for pods: it lists which other pods or ports a pod may talk to. Anything not listed is blocked.">NetworkPolicy</span> controls who it can talk to over the network.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">k8s/manifests/rbac.yaml</span>
+            <pre><code><span class="code-line">  - <span class="code-property">apiGroups</span>: [<span class="code-string">""</span>]</span>
+<span class="code-line">    <span class="code-property">resources</span>: [<span class="code-string">"pods"</span>, <span class="code-string">"pods/log"</span>, <span class="code-string">"pods/status"</span>, <span class="code-string">"services"</span>, <span class="code-string">"configmaps"</span>, <span class="code-string">"nodes"</span>,</span>
+<span class="code-line">                <span class="code-string">"persistentvolumeclaims"</span>, <span class="code-string">"persistentvolumes"</span>, <span class="code-string">"namespaces"</span>, <span class="code-string">"events"</span>,</span>
+<span class="code-line">                <span class="code-string">"serviceaccounts"</span>, <span class="code-string">"endpoints"</span>, <span class="code-string">"resourcequotas"</span>, <span class="code-string">"limitranges"</span>,</span>
+<span class="code-line">                <span class="code-string">"replicationcontrollers"</span>, <span class="code-string">"podtemplates"</span>, <span class="code-string">"componentstatuses"</span>]</span>
+<span class="code-line">    <span class="code-property">verbs</span>: [<span class="code-string">"get"</span>, <span class="code-string">"list"</span>, <span class="code-string">"watch"</span>]</span>
+<span class="code-line"></span>
+<span class="code-line">  - <span class="code-property">apiGroups</span>: [<span class="code-string">"*"</span>]</span>
+<span class="code-line">    <span class="code-property">resources</span>: [<span class="code-string">"*"</span>]</span>
+<span class="code-line">    <span class="code-property">verbs</span>: [<span class="code-string">"create"</span>, <span class="code-string">"update"</span>, <span class="code-string">"patch"</span>, <span class="code-string">"delete"</span>]</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For the core resource types...</p>
+              <p class="tl">...allow reading pods, their logs, services, configmaps, nodes...</p>
+              <p class="tl">...storage, namespaces, events...</p>
+              <p class="tl">...and more. <strong>Notice "secrets" isn't here</strong>, so the agent can't read Secret values.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Read-only verbs.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">And for <em>every</em> API group...</p>
+              <p class="tl">...and <em>every</em> resource type...</p>
+              <p class="tl">...allow create, update, patch and delete. Very broad, so the Python guards from Module 4 are the real fine-grained safety layer.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">backend in</code><span class="badge-desc">Only from frontend pods, port 8000</span></div>
+          <div class="badge-item"><code class="badge-code">backend out</code><span class="badge-desc">Port 443 (Bedrock and, on EKS, the Kubernetes API), Postgres on 5432, DNS on 53</span></div>
+          <div class="badge-item"><code class="badge-code">postgres in</code><span class="badge-desc">Only from backend pods, port 5432</span></div>
+          <div class="badge-item"><code class="badge-code">frontend out</code><span class="badge-desc">Only to the backend, plus DNS</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where it breaks (and how to tell)</h2>
+        <p>These are the failure modes visible in the code and deploy notes. Each one has a fingerprint you can recognise.</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>Pod stuck in CreateContainerConfigError</strong><p><code>configmap.yaml</code> alone lacks AWS_REGION, the model IDs and REQUIRE_APPROVAL. Those are merged in by <span class="term" data-definition="Kustomize is a tool built into kubectl ('kubectl apply -k') that assembles Kubernetes YAML files and patches in per-environment values like image tags and config, without editing the originals.">Kustomize</span>'s configMapGenerator. Deploy with <code>kubectl apply -k k8s/</code>, not <code>-f manifests/</code>.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Pod exits immediately on start</strong><p><code>entrypoint.sh</code> runs a <span class="term" data-definition="A preflight check is a quick test a program runs before starting for real (are settings present? is the database reachable?) so it fails fast with a clear message instead of failing confusingly later.">preflight check</span>: missing required env vars, no in-cluster config, or an unreachable Postgres stops it with a clear message. Read <code>kubectl logs</code>.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Every Bedrock call fails with InvalidClientTokenId on EKS</strong><p>Access keys in the Secret override <span class="term" data-definition="EKS Pod Identity is an AWS feature that gives a pod an AWS role automatically, so no access keys need to be stored anywhere.">Pod Identity</span> in boto3's credential chain. Leave them commented out on EKS.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>list_secrets works locally but errors in the cluster</strong><p>Locally the backend uses <em>your</em> kubeconfig (often admin). In the cluster it uses the ServiceAccount, whose ClusterRole doesn't grant reading secrets, so the API answers 403 Forbidden.</p></div></div>
+          <div class="step-card"><div class="step-num">5</div><div class="step-body"><strong>Approve spins, then a gateway timeout</strong><p>Each request runs synchronously. With verify sleeping 15s and up to 3 attempts, one call can take minutes. If you enable the Ingress, its default proxy timeout (60s on ingress-nginx) may cut it off first.</p></div></div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🪞</div>
+          <div class="callout-content">
+            <strong class="callout-title">The agent could diagnose its own outage</strong>
+            <p>Failure #1 is exactly the kind of problem the agent is built to catch: a pod waiting on a missing ConfigMap key. But a guard keeps it out of its own namespace while things are healthy, and it can't reason at all while its own pod won't start. Some problems still need a human with kubectl.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module5">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>After deploying, the backend pod shows Ready, but every question in the chat fails with an AWS credentials error.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Exactly. /readyz only reads bedrock_client.meta.region_name, which never touches AWS. Ready proves the Kubernetes API works, not Bedrock. Next step: look for stray AWS keys overriding Pod Identity, or check the IAM role's bedrock:InvokeModel permission."
+                 data-explanation-wrong="Look at what /readyz actually does for Bedrock: it reads a local setting and never calls AWS. So 'Ready' tells you nothing about credentials. Investigate the credential chain instead.">
+              <h3 class="quiz-question">How can the pod be Ready if Bedrock is broken?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Kubernetes caches readiness for an hour</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The readiness check never actually calls Bedrock; it only checks the client object exists</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The NetworkPolicy is blocking the readiness probe</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You add a Slack notification: the backend should POST to hooks.slack.com when a fix succeeds. It works locally but times out in the cluster.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="a"
+                 data-explanation-right="Good instinct to check the network rules first. Slack is HTTPS on 443, which the backend egress allows, so check DNS resolution and any cluster-level egress firewall next. Either way, the NetworkPolicy is the first file to read when 'works locally, times out in cluster.'"
+                 data-explanation-wrong="'Works locally, times out in the cluster' is the classic fingerprint of a network rule. Start with the backend's NetworkPolicy egress list, then DNS and any cluster-level egress firewall.">
+              <h3 class="quiz-question">Where do you look first?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The backend NetworkPolicy's egress rules (and DNS / cluster egress)</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The ClusterRole in rbac.yaml</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The LangGraph checkpointer</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Right. Write access in rbac.yaml is a wildcard, so the precise rules (no self-RBAC, protected namespaces, no Bound PV deletes) live in Python. Narrowing RBAC as well would be defense in depth, at the cost of the agent being able to fix fewer things."
+               data-explanation-wrong="Re-read the write rule in rbac.yaml: apiGroups '*', resources '*'. Kubernetes itself would allow almost any change. The fine-grained protection is the Python guard layer from Module 4.">
+            <h3 class="quiz-question">A security reviewer asks: "What actually stops this agent from deleting a Deployment in kube-system?" What's the honest answer?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The ClusterRole doesn't allow deletes</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The NetworkPolicy blocks access to kube-system</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The human approval step, plus the Python guard that refuses writes to healthy objects in protected namespaces. RBAC itself allows it.</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

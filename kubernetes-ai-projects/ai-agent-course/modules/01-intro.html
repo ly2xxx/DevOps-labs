@@ -1,0 +1,265 @@
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">One Question, End to End</h1>
+      <p class="module-subtitle">You type "why is my pod crashing?" Here's everything that happens before an answer comes back.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">What this thing actually does</h2>
+        <p>This project is a chat window that can look inside a
+          <span class="term" data-definition="Kubernetes (often written K8s) is software that runs and babysits lots of apps across a group of computers. You tell it 'keep 3 copies of my app running' and it makes that true, restarting things that crash. When talking to AI, you'd say 'deploy this to a Kubernetes cluster.'">Kubernetes</span>
+          <span class="term" data-definition="A cluster is the group of computers (called nodes) that Kubernetes manages as one big machine. 'The cluster' means the whole environment your apps live in.">cluster</span>,
+          figure out what's broken, and, once you click Approve, actually fix it. It then checks its own work and tries again if the fix didn't take.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🔍</div>
+            <h4 class="pattern-title">Diagnose</h4>
+            <p class="pattern-desc">Reads pods, logs and events to find the real root cause, not a list of guesses.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">📝</div>
+            <h4 class="pattern-title">Propose</h4>
+            <p class="pattern-desc">Writes a short, specific plan: "patch deployment X to image Y."</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">✋</div>
+            <h4 class="pattern-title">Wait for you</h4>
+            <p class="pattern-desc">Nothing changes on the cluster until a human clicks Approve.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">✅</div>
+            <h4 class="pattern-title">Apply &amp; verify</h4>
+            <p class="pattern-desc">Makes the change, waits, re-inspects, and retries up to 3 times.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔧</div>
+          <div class="callout-content">
+            <strong class="callout-title">Think of it as a mechanic who needs your signature</strong>
+            <p>A good mechanic plugs in the diagnostic scanner, tells you what's wrong, hands you a work order, and only picks up a wrench once you sign. Then they test-drive the car before handing back the keys. This agent follows that exact script.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The three folders</h2>
+        <p>The project splits into three parts that each live in their own folder. Each one is a separate program.</p>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">ai-agent/</span>
+            <span class="ft-desc">The whole project</span>
+            <div class="ft-children">
+              <div class="ft-folder">
+                <span class="ft-name">agent-interface/</span>
+                <span class="ft-desc">The chat window you see (Next.js, TypeScript)</span>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">agent-backend/</span>
+                <span class="ft-desc">The brain: an API server plus the AI agent (Python)</span>
+                <div class="ft-children">
+                  <div class="ft-folder"><span class="ft-name">app/agent/</span><span class="ft-desc">The step-by-step workflow (diagnose → fix → verify)</span></div>
+                  <div class="ft-folder"><span class="ft-name">app/tools/</span><span class="ft-desc">The actions the AI may take on the cluster</span></div>
+                  <div class="ft-folder"><span class="ft-name">app/infra/</span><span class="ft-desc">Plumbing: AI model, database, metrics, cost tracking</span></div>
+                  <div class="ft-file"><span class="ft-name">app/main.py</span><span class="ft-desc">The front desk: every URL the UI can call</span></div>
+                </div>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">k8s/</span>
+                <span class="ft-desc">Instructions for running the agent itself inside Kubernetes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">🖥️</div>
+            <div>
+              <strong>Frontend: <span class="term" data-definition="Next.js is a popular framework for building websites with React. It can also run small bits of server code, which this project uses to forward requests.">Next.js</span></strong>
+              <p>Draws the chat, the Approve/Reject buttons, and the issue picker.</p>
+            </div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🐍</div>
+            <div>
+              <strong>Backend: <span class="term" data-definition="FastAPI is a Python library for building web APIs. You write a normal Python function, put a decorator like @app.post('/api/query') on top, and it becomes a URL other programs can call.">FastAPI</span> + <span class="term" data-definition="LangGraph is a Python library for building AI agents as a flowchart: each box is a step (a 'node'), arrows say which step comes next, and it can pause and resume mid-flow.">LangGraph</span></strong>
+              <p>Receives your question and runs the diagnose → propose → apply → verify flowchart.</p>
+            </div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-3)">☁️</div>
+            <div>
+              <strong>AI model: <span class="term" data-definition="AWS Bedrock is Amazon's service for calling AI models over the internet. You send text, it sends back the model's reply, and you pay per token (roughly per word).">AWS Bedrock</span> (Amazon Nova Pro)</strong>
+              <p>The language model that reads tool output and decides what to do next.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Follow one question through the system</h2>
+        <p>Click <strong>Next Step</strong> to watch "why is my web pod crashing?" travel from your keyboard to the cluster and back.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m1user","label":"You type the question and hit Send. The page POSTs it to /api/query on its own server."},
+          {"highlight":"flow-m1proxy","label":"The Next.js proxy route forwards the request to the Python backend (BACKEND_URL).","packet":true,"from":"m1user","to":"m1proxy"},
+          {"highlight":"flow-m1api","label":"FastAPI checks the question is not empty, creates a fresh session_id, and starts the agent.","packet":true,"from":"m1proxy","to":"m1api"},
+          {"highlight":"flow-m1llm","label":"The Diagnostics step asks Bedrock: here is the question and a list of tools, what should I look at?","packet":true,"from":"m1api","to":"m1llm"},
+          {"highlight":"flow-m1k8s","label":"The model asks for get_pod_status, describe_pod, get_pod_logs. The backend runs them against the Kubernetes API.","packet":true,"from":"m1llm","to":"m1k8s"},
+          {"highlight":"flow-m1llm","label":"Real cluster data goes back to the model, which writes a report ending in REMEDIATION_NEEDED: YES.","packet":true,"from":"m1k8s","to":"m1llm"},
+          {"highlight":"flow-m1api","label":"A second model call drafts the fix. Then the flowchart PAUSES, because nothing may be applied without approval.","packet":true,"from":"m1llm","to":"m1api"},
+          {"highlight":"flow-m1user","label":"Report + proposed fix + session_id return to the browser. You see Approve and Reject buttons.","packet":true,"from":"m1api","to":"m1user"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m1user"><div class="flow-actor-icon">💬</div><span>Chat UI</span></div>
+            <div class="flow-actor" id="flow-m1proxy"><div class="flow-actor-icon">🔀</div><span>Next.js proxy</span></div>
+            <div class="flow-actor" id="flow-m1api"><div class="flow-actor-icon">🐍</div><span>FastAPI + agent</span></div>
+            <div class="flow-actor" id="flow-m1llm"><div class="flow-actor-icon">🧠</div><span>Bedrock model</span></div>
+            <div class="flow-actor" id="flow-m1k8s"><div class="flow-actor-icon">☸️</div><span>Kubernetes API</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The AI never touches the cluster directly</strong>
+            <p>The model only ever <em>asks</em> for a tool by name. Python code decides whether to run it, runs it, and hands back the result. That gap is where every safety check in this project lives, and you'll see it again in Module 4.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Stop 1: the forwarding desk</h2>
+        <p>The browser never talks to Python directly. It calls <code>/api/...</code> on the same website, and a tiny Next.js file passes the request along. The file's odd name, <code>[...path]</code>, means "catch every URL under /api/."</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">agent-interface/app/api/[...path]/route.ts</span>
+            <pre><code><span class="code-line"><span class="code-keyword">async function</span> <span class="code-function">proxy</span>(req: NextRequest, path: string[]): Promise&lt;NextResponse&gt; {</span>
+<span class="code-line">  <span class="code-keyword">const</span> target = <span class="code-string">`${backendUrl()}/api/${path.join("/")}${req.nextUrl.search}`</span>;</span>
+<span class="code-line">  <span class="code-keyword">const</span> init: RequestInit = {</span>
+<span class="code-line">    <span class="code-property">method</span>: req.method,</span>
+<span class="code-line">    <span class="code-property">headers</span>: { <span class="code-string">"Content-Type"</span>: req.headers.<span class="code-function">get</span>(<span class="code-string">"content-type"</span>) || <span class="code-string">"application/json"</span> },</span>
+<span class="code-line">  };</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a helper that takes an incoming request plus the pieces of its URL path.</p>
+              <p class="tl">Build the real address: the backend's base URL, then <code>/api/</code>, then the same path and any <code>?query</code> bits the browser sent.</p>
+              <p class="tl">Start describing the outgoing request...</p>
+              <p class="tl">...using the same method (GET or POST) the browser used...</p>
+              <p class="tl">...and the same content type, defaulting to <span class="term" data-definition="JSON (JavaScript Object Notation) is a text format for structured data, like {&quot;query&quot;: &quot;why is my pod crashing?&quot;}. Nearly every web API sends and receives JSON.">JSON</span>.</p>
+              <p class="tl">Done describing it. The rest of the file sends it and copies the answer back.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why bother with a middleman?</strong>
+            <p>Because the browser only talks to one address, the Python backend can stay private inside the cluster, and you avoid <span class="term" data-definition="CORS (Cross-Origin Resource Sharing) is a browser security rule: a page from site A can't freely call an API on site B unless B explicitly allows it. A same-site proxy sidesteps the whole problem.">CORS</span> headaches. If the backend is down, this file returns a clear 502 error naming the address it couldn't reach.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Stop 2: the front desk opens a ticket</h2>
+        <p>Inside Python, <code>main.py</code> is the reception area. Each <span class="term" data-definition="An endpoint is one specific URL an API answers, like POST /api/query. Each one is a door into the server that does one job.">endpoint</span> is a door. This is the first one your question walks through.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">agent-backend/app/main.py</span>
+            <pre><code><span class="code-line"><span class="code-function">@app.post</span>(<span class="code-string">"/api/query"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">submit_query</span>(request: QueryRequest):</span>
+<span class="code-line">    query = request.query.<span class="code-function">strip</span>()</span>
+<span class="code-line">    <span class="code-keyword">if not</span> query:</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">400</span>, detail=<span class="code-string">"Query cannot be empty."</span>)</span>
+<span class="code-line"></span>
+<span class="code-line">    session_id = <span class="code-function">str</span>(uuid.<span class="code-function">uuid4</span>())</span>
+<span class="code-line">    config = {<span class="code-string">"configurable"</span>: {<span class="code-string">"thread_id"</span>: session_id}}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">When someone POSTs to <code>/api/query</code>, run the function below.</p>
+              <p class="tl">The incoming body must match the <code>QueryRequest</code> shape (it must have a <code>query</code> text field).</p>
+              <p class="tl">Trim spaces off the question.</p>
+              <p class="tl">If nothing is left...</p>
+              <p class="tl">...reject it with error 400 ("bad request") instead of wasting an AI call.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Generate a random, unique ticket number (a <span class="term" data-definition="A UUID is a long random ID like 3f2a9c1e-... that is practically guaranteed to be unique, so two sessions never collide.">UUID</span>) for this conversation.</p>
+              <p class="tl">Tag the agent run with that ticket so it can be paused now and found again later.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>That <code>thread_id</code> is the thread you'll pull on all through Module 3: it's how clicking Approve two minutes later reconnects to <em>this exact</em> half-finished investigation.</p>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module1">
+
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Right. The browser only knows about its own /api address. If the backend container is down or BACKEND_URL points somewhere wrong, the proxy route catches the failure and answers 502 with a message naming the address it tried."
+               data-explanation-wrong="Not quite. The browser never contacts Python directly. It talks to the Next.js proxy, and the proxy is the one that fails to reach the backend, so look at BACKEND_URL and whether the backend is running.">
+            <h3 class="quiz-question">The chat shows "Failed to reach backend at http://127.0.0.1:8000". Where is the problem most likely?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>AWS Bedrock is rejecting the request</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Next.js proxy can't connect to the Python backend (it isn't running, or BACKEND_URL is wrong)</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The Kubernetes cluster is down</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Exactly. The model can only request a tool. The Python loop decides whether to actually run it. That's why guardrails written in Python are dependable and guardrails written only as instructions to the model are not."
+               data-explanation-wrong="Close, but the model never connects to Kubernetes. It returns a request like 'please call describe_pod', and Python code chooses whether to run it. That's the safest place to block something.">
+            <h3 class="quiz-question">You want to make sure the AI can never delete anything in the "payments" namespace. Where is the most reliable place to enforce that?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add "never delete anything in payments" to the AI's instructions</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Hide the Reject button in the chat UI</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>In the Python code that actually runs the delete tool, before it calls Kubernetes</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Every new question gets a brand-new session_id. If your approval click sent an old or wrong ID, the backend can't find the paused investigation it belongs to."
+               data-explanation-wrong="Think about what links the 'Approve' click back to the investigation. Every question gets its own session_id (thread_id), and the decision has to carry that same ID.">
+            <h3 class="quiz-question">You ask a question, then ask a second one before approving the first fix. Why does the UI say the first proposal was "dropped"?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The new question starts a new session_id, and the UI only tracks one session at a time</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Bedrock can only handle one question per minute</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Kubernetes cancels pending changes automatically</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

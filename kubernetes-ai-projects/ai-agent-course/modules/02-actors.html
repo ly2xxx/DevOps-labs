@@ -1,0 +1,332 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">Meet the Specialists</h1>
+      <p class="module-subtitle">The "agent" is really four focused roles passing one shared chart between them.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A hospital ward, not a genius</h2>
+        <p>It's tempting to picture one all-knowing AI. In reality, the backend runs a
+          <span class="term" data-definition="A state machine is a program that is always in exactly one named 'state' (like 'diagnosing' or 'waiting for approval') and has clear rules for moving to the next one. Traffic lights are state machines.">state machine</span>
+          of separate steps. Each step is a specialist with its own instructions, and they all read and write the same patient chart.</p>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🔍</div>
+            <div><strong>diagnose</strong><p>The examining doctor. Read-only tools only. Writes the diagnosis and raises a YES/NO flag: does anything need changing?</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-4)">☑️</div>
+            <div><strong>select_issues</strong><p>The triage desk. Only shows up when more than one problem was found, so you can pick which to fix.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">📝</div>
+            <div><strong>propose_remediation / propose_retry</strong><p>The surgeon planning the operation. Writes a 2-4 sentence plan naming the exact tool and arguments.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-3)">🛠️</div>
+            <div><strong>apply_remediation</strong><p>The surgeon operating. The only step holding write tools: patch, scale, delete, apply YAML.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-5)">🩺</div>
+            <div><strong>verify_remediation</strong><p>The follow-up check. Waits 15 seconds, re-reads the cluster and answers GOAL_ACHIEVED: YES or NO.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Wiring the flowchart</h2>
+        <p>The whole flowchart is declared in one short file. Each <span class="term" data-definition="In LangGraph, a node is one box in the flowchart: a Python function that receives the current state and returns the pieces of state it wants to change.">node</span> is registered by name and pointed at a Python
+          <span class="term" data-definition="A function is a named, reusable chunk of code that takes inputs and gives back an output. 'diagnose_node' is a function; calling it runs the diagnosis.">function</span>.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/graph.py</span>
+            <pre><code><span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"diagnose"</span>, diagnose_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"select_issues"</span>, select_issues_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"propose_remediation"</span>, propose_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"propose_retry"</span>, propose_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"apply_remediation"</span>, apply_remediation_node)</span>
+<span class="code-line">workflow.<span class="code-function">add_node</span>(<span class="code-string">"verify_remediation"</span>, verify_remediation_node)</span>
+<span class="code-line"></span>
+<span class="code-line">workflow.<span class="code-function">set_entry_point</span>(<span class="code-string">"diagnose"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Box 1, "diagnose", runs the diagnosis function.</p>
+              <p class="tl">Box 2, "select_issues", is the triage pause.</p>
+              <p class="tl">Box 3 drafts the first fix plan.</p>
+              <p class="tl">Box 4 drafts a <em>retry</em> plan, using the <strong>same function</strong> under a different name.</p>
+              <p class="tl">Box 5 actually changes the cluster.</p>
+              <p class="tl">Box 6 checks whether it worked.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Every run starts at "diagnose."</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Same function, two names: why?</strong>
+            <p><code>propose_remediation</code> and <code>propose_retry</code> do identical work. Giving them separate names lets the system pause <em>before a retry</em> without pausing before the first proposal. Naming a step is how you get to attach rules to it, a trick worth asking AI for by name ("make it a separate node so I can interrupt before it").</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The shared chart</h2>
+        <p>Every specialist receives the same <span class="term" data-definition="State is the data a program remembers while it runs. Here it's one dictionary holding the user's question, the diagnosis, the proposed fix, the attempt count and so on.">state</span>, a
+          <span class="term" data-definition="A TypedDict is a Python dictionary (a set of named fields) where each field's type is declared up front, like a form with labelled boxes. It helps tools catch typos in field names.">TypedDict</span>
+          with labelled fields. A node returns only the boxes it filled in, and LangGraph merges them into the chart.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/state.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">class</span> <span class="code-function">AgentState</span>(TypedDict):</span>
+<span class="code-line">    <span class="code-property">messages</span>: Annotated[List[BaseMessage], operator.add]</span>
+<span class="code-line">    <span class="code-property">user_request</span>: str</span>
+<span class="code-line">    <span class="code-property">diagnostic_report</span>: str</span>
+<span class="code-line">    <span class="code-property">remediation_needed</span>: bool</span>
+<span class="code-line">    <span class="code-property">goal_achieved</span>: bool</span>
+<span class="code-line">    <span class="code-property">blocked</span>: bool</span>
+<span class="code-line">    <span class="code-property">retry_context</span>: str</span>
+<span class="code-line">    <span class="code-property">issues</span>: List[str]</span>
+<span class="code-line">    <span class="code-property">proposed_fix</span>: str</span>
+<span class="code-line">    <span class="code-property">approval_status</span>: str</span>
+<span class="code-line">    <span class="code-property">fix_result</span>: str</span>
+<span class="code-line">    <span class="code-property">verification_result</span>: str</span>
+<span class="code-line">    <span class="code-property">attempt</span>: int</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Here's the chart every step shares.</p>
+              <p class="tl">The running conversation. <code>operator.add</code> means new messages get <strong>appended</strong>, never overwritten.</p>
+              <p class="tl">What you originally asked.</p>
+              <p class="tl">The diagnostician's write-up.</p>
+              <p class="tl">The YES/NO flag: does anything need changing?</p>
+              <p class="tl">Did the verifier confirm success?</p>
+              <p class="tl">Was the fix refused outright (retrying is pointless)?</p>
+              <p class="tl">Notes on failed attempts so the next plan doesn't repeat them.</p>
+              <p class="tl">Separate problems found, if more than one.</p>
+              <p class="tl">The current plan.</p>
+              <p class="tl">"pending" or "approved".</p>
+              <p class="tl">What happened when the fix ran.</p>
+              <p class="tl">The verifier's findings.</p>
+              <p class="tl">How many tries so far.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Listen in on the ward round</h2>
+        <p>Here's a real-shaped run, told as a group chat between the nodes. A Deployment is stuck because its image tag doesn't exist.</p>
+
+        <div class="chat-window" id="chat-module2">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="user" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-secondary)">You</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-secondary)">You</span><p>why is the web pod in shop-ns not starting?</p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="diag" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">diagnose</span><p>On it. Calling get_pod_status, then describe_pod. Container is waiting with reason <strong>ImagePullBackOff</strong>: image "nginx:1.99-typo" not found.</p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="diag" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">diagnose</span><p>owner_references says a Deployment owns this pod, so the fix must be on the Deployment. One issue only. REMEDIATION_NEEDED: YES.</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-4)">route_after_diagnose</span><p>Flag is YES, one issue, so skip triage. Next up: propose_remediation.</p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="prop" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">P</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">propose_remediation</span><p>Plan: patch_deployment_image(deployment_name='web', container_name='web', image='nginx:1.27', namespace='shop-ns'). No restart, because the bad image is baked into the spec.</p></div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="gate" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-muted)">⏸</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-muted)">LangGraph</span><p>Pausing before apply_remediation. Waiting for a human. (Saved everything to the checkpoint.)</p></div>
+            </div>
+            <div class="chat-message" data-msg="6" data-sender="user" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-text-secondary)">You</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-text-secondary)">You</span><p>👍 Approve</p></div>
+            </div>
+            <div class="chat-message" data-msg="7" data-sender="apply" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">A</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">apply_remediation</span><p>approval_status is "approved", so I'm allowed. Called patch_deployment_image. Result: success. attempt = 1.</p></div>
+            </div>
+            <div class="chat-message" data-msg="8" data-sender="verify" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-5)">V</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-5)">verify_remediation</span><p>Slept 15s. I don't trust "success" from a tool, so I re-read the Deployment: 1/1 ready, pod Running, 0 restarts in shop-ns. GOAL_ACHIEVED: YES.</p></div>
+            </div>
+          </div>
+
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">How a paragraph becomes a yes/no</h2>
+        <p>An AI model answers in prose, but code needs a
+          <span class="term" data-definition="A boolean is a value that is either True or False, nothing else. Code uses booleans to decide which branch to take.">boolean</span>.
+          The trick: the instructions demand the reply end with a fixed line like <code>REMEDIATION_NEEDED: YES</code>, and a
+          <span class="term" data-definition="A regex (regular expression) is a mini-language for finding patterns in text, like 'the word FLAG, a colon, then YES or NO'. Powerful but easy to get subtly wrong.">regex</span> fishes it out.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/parsing.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">_extract_flag</span>(text: str, flag: str) -&gt; tuple:</span>
+<span class="code-line">    pattern = <span class="code-string">rf"\s*{flag}\s*[:=]\s*(YES|NO)\b[^\n]*"</span></span>
+<span class="code-line">    match = re.<span class="code-function">search</span>(pattern, text, re.IGNORECASE)</span>
+<span class="code-line">    is_yes = <span class="code-function">bool</span>(match) <span class="code-keyword">and</span> match.<span class="code-function">group</span>(<span class="code-number">1</span>).<span class="code-function">upper</span>() == <span class="code-string">"YES"</span></span>
+<span class="code-line">    cleaned = re.<span class="code-function">sub</span>(pattern, <span class="code-string">""</span>, text, flags=re.IGNORECASE)</span>
+<span class="code-line">    <span class="code-keyword">return</span> is_yes, re.<span class="code-function">sub</span>(<span class="code-string">r"\n{3,}"</span>, <span class="code-string">"\n\n"</span>, cleaned).<span class="code-function">strip</span>()</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Given the model's reply and a flag name like "REMEDIATION_NEEDED"...</p>
+              <p class="tl">...describe the pattern: the flag name, a colon or equals sign, then YES or NO.</p>
+              <p class="tl">Look for it anywhere, ignoring upper/lower case.</p>
+              <p class="tl">It's a YES only if the line was found <strong>and</strong> says YES. Missing flag = NO (the safe default).</p>
+              <p class="tl">Cut that line out so the user never sees the robot-speak.</p>
+              <p class="tl">Hand back the yes/no plus the tidied-up report.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>Then a tiny <span class="term" data-definition="A router (in LangGraph, a 'conditional edge') is a function that looks at the state and returns the name of the next node to run. It's the fork in the flowchart.">router</span> function reads those flags and picks the next box:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">app/agent/nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">route_after_diagnose</span>(state: AgentState) -&gt; str:</span>
+<span class="code-line">    <span class="code-keyword">if not</span> state.<span class="code-function">get</span>(<span class="code-string">"remediation_needed"</span>):</span>
+<span class="code-line">        <span class="code-keyword">return</span> END</span>
+<span class="code-line">    <span class="code-keyword">if</span> <span class="code-function">len</span>(state.<span class="code-function">get</span>(<span class="code-string">"issues"</span>, []) <span class="code-keyword">or</span> []) &gt; <span class="code-number">1</span>:</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-string">"select_issues"</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"propose_remediation"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">After diagnosis, decide where to go.</p>
+              <p class="tl">If nothing needs changing (a read-only question)...</p>
+              <p class="tl">...stop here and just show the report.</p>
+              <p class="tl">If more than one separate problem was found...</p>
+              <p class="tl">...go to triage so the human picks.</p>
+              <p class="tl">Otherwise, go straight to drafting a fix.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">When the model "refuses," the code pushes back</strong>
+            <p>Language models love to say "I can't execute commands, please run kubectl..." In <code>diagnose_node</code>, if the reply says NO <em>and</em> contains phrases like "as an ai" or "please run", the code sends a corrective message and asks again. If your own agent keeps giving advice instead of acting, this pattern is the fix to request.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Match the specialist to the job</h2>
+        <p>Drag each node onto the task it owns.</p>
+
+        <div class="dnd-container" id="dnd-module2">
+          <div class="dnd-chips">
+            <div class="dnd-chip" draggable="true" data-answer="diag">diagnose</div>
+            <div class="dnd-chip" draggable="true" data-answer="prop">propose_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="apply">apply_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="verify">verify_remediation</div>
+            <div class="dnd-chip" draggable="true" data-answer="select">select_issues</div>
+          </div>
+          <div class="dnd-zones">
+            <div class="dnd-zone" data-correct="verify"><p class="dnd-zone-label">Refuses to trust a tool's "success" message and re-reads the live object</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="apply"><p class="dnd-zone-label">The only step allowed to call write tools like patch_deployment</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="diag"><p class="dnd-zone-label">Decides whether REMEDIATION_NEEDED is YES or NO</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="select"><p class="dnd-zone-label">Only runs when two or more unrelated problems were found</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="prop"><p class="dnd-zone-label">Writes a 2-4 sentence plan naming the exact tool and arguments</p><div class="dnd-zone-target">Drop here</div></div>
+          </div>
+          <button class="btn" onclick="checkDnD('dnd-module2')">Check Matches</button>
+          <button class="btn" onclick="resetDnD('dnd-module2')">Reset</button>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module2">
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You ask "list the pods in shop-ns." The agent answers with a correct list but no Approve button appears.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="Correct. A read-only question should end with REMEDIATION_NEEDED: NO, and route_after_diagnose sends that straight to END. No fix, no button. Working as designed."
+                 data-explanation-wrong="Not a bug. Trace the router: no remediation flag means it returns END right after diagnosis, so there's nothing to approve.">
+              <h3 class="quiz-question">What happened?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>A bug: the proposal step crashed</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Expected: diagnose flagged NO, so the router went straight to END</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The approval setting is turned off</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You switch to a new model. Now it often ends its replies with "**Remediation needed** - yes" in bold, with no colon.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="Exactly. The regex wants the flag name, then ':' or '=', then YES/NO. No match means is_yes is False, so real problems get reported but never fixed. That's why prompts insist on the exact line, and why changing models deserves a re-test."
+                 data-explanation-wrong="Look at the pattern in _extract_flag: it needs REMEDIATION_NEEDED followed by ':' or '='. A bold, colon-less version won't match, and a missing match counts as NO.">
+              <h3 class="quiz-question">What symptom would you expect?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The app crashes with an error</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Every question now proposes a fix</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Broken resources get diagnosed, but no fix is ever proposed</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Yes. Adding a box and wiring it up in graph.py keeps each role focused, and you can pause before it, time it, and test it on its own. Stuffing it into another node's prompt makes that prompt even longer and harder to reason about."
+               data-explanation-wrong="Think about how the existing design handles each new responsibility: it gets its own node in graph.py. That keeps roles focused and lets you pause, time and test each one separately.">
+            <h3 class="quiz-question">You want a "backup the resource before changing it" step. How should you ask an AI to build it?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add a backup_resource node in graph.py between propose_remediation and apply_remediation"</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add a sentence to the diagnose prompt telling it to back things up"</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Make the frontend download the YAML before sending Approve"</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
