@@ -1,0 +1,138 @@
+https://devopscube.com/build-kubernetes-ai-agent/
+
+cd ai-agent/
+
+cd k8s/scripts
+
+chmod +x setup-pod-identity.sh
+
+
+$ aws eks list-clusters --region us-west-2
+{
+    "clusters": []
+}
+
+eksctl create cluster \
+  --name eks-cluster \
+  --region us-west-2 \
+  --nodegroup-name standard-workers \
+  --node-type m7i-flex.large \
+  --nodes 2
+
+#######################################################################################################
+# rollback
+aws eks describe-nodegroup --cluster-name eks-cluster --nodegroup-name standard-workers \
+  --region us-west-2 --query 'nodegroup.{status:status,health:health.issues}'
+
+aws cloudformation describe-stack-events --region us-west-2 \
+  --stack-name eksctl-eks-cluster-nodegroup-standard-workers \
+  --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" \
+  --output table
+
+eksctl delete nodegroup --cluster eks-cluster --name standard-workers --region us-west-2 --wait
+
+# instance types your account can use under the free tier, in this region
+aws ec2 describe-instance-types --region us-west-2 \
+  --filters Name=free-tier-eligible,Values=true \
+  --query "InstanceTypes[].[InstanceType,VCpuInfo.DefaultVCpus,MemoryInfo.SizeInMiB]" \
+  --output table
+
+# which availability zones offer m7i-flex.large (your cluster uses 2b, 2c and 2d)
+aws ec2 describe-instance-type-offerings --region us-west-2 \
+  --location-type availability-zone \
+  --filters Name=instance-type,Values=m7i-flex.large \
+  --query "InstanceTypeOfferings[].Location" --output text
+
+eksctl create nodegroup --cluster eks-cluster --name ng-1 --region us-west-2 \
+  --node-type m7i-flex.large --nodes 2
+#######################################################################################################
+
+*(If `eksctl` isn't installed on Windows yet, you can install it via `winget install Weaveworks.eksctl` or `choco install eksctl`.)*
+mkdir -p ~/bin
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Windows_amd64.zip"
+unzip -o eksctl_Windows_amd64.zip -d ~/bin
+rm eksctl_Windows_amd64.zip
+export PATH="$HOME/bin:$PATH"
+eksctl version
+
+
+If the cluster is already created and you just need to add the **Pod Identity Agent add-on**:
+
+aws eks create-addon \
+  --cluster-name eks-cluster \
+  --addon-name eks-pod-identity-agent \
+  --region us-west-2
+
+aws eks create-addon --cluster-name YOUR_CLUSTER_NAME --addon-name eks-pod-identity-agent
+
+./setup-pod-identity.sh create
+
+#######################################################################################################
+kubectl config current-context
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo
+aws eks describe-cluster --name eks-cluster --region us-west-2 --query cluster.endpoint --output text
+
+aws eks update-kubeconfig --name eks-cluster --region us-west-2
+kubectl get nodes
+
+#######################################################################################################
+#Step 1: Set gp2 as the default StorageClass
+kubectl patch storageclass gp2 -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+
+#Step 2: Grant EBS permissions & install the aws-ebs-csi-driver add-on
+#One-time creation
+aws iam create-role \
+  --role-name AmazonEKS_EBS_CSI_DriverRole \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": { "Service": "pods.eks.amazonaws.com" },
+      "Action": ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  }' 2>/dev/null || true
+#One-time creation
+aws iam attach-role-policy \
+  --role-name AmazonEKS_EBS_CSI_DriverRole \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+aws eks create-pod-identity-association \
+  --cluster-name eks-cluster \
+  --region us-west-2 \
+  --namespace kube-system \
+  --service-account ebs-csi-controller-sa \
+  --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole"
+
+aws eks create-addon \
+  --cluster-name eks-cluster \
+  --addon-name aws-ebs-csi-driver \
+  --region us-west-2
+
+#One-time creation
+#Step 3: Recreate the Postgres PVC so it picks up the new default StorageClass
+kubectl -n ai-agent delete sts ai-agent-postgres
+kubectl -n ai-agent delete pvc data-ai-agent-postgres-0
+##############################################################
+kubectl apply -k .
+
+###############################################################
+$ kubectl get po -n ai-agent
+#verify
+NAME                                 READY   STATUS    RESTARTS   AGE     
+
+ai-agent-backend-5ccd887dbb-p84pr    1/1     Running   0          1m      
+ai-agent-frontend-79cc74499f-x76s4   1/1     Running   0          1m      
+ai-agent-postgres-0                  1/1     Running   0          1m
+################################################################
+
+
+kubectl -n ai-agent get pods
+kubectl -n ai-agent get pvc
+kubectl -n ai-agent describe pod ai-agent-postgres-0 | tail -15
+kubectl logs deploy/ai-agent-backend --previous | tail -20
+kubectl get storageclass
+
+kubectl delete -k .
+./setup-pod-identity.sh cleanup

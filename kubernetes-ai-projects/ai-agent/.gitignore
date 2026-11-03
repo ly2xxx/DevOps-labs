@@ -1,0 +1,12 @@
+.env
+
+__pycache__/
+*.pyc
+
+venv/
+
+agent-interface/node_modules/
+agent-interface/.next/
+agent-interface/next-env.d.ts
+agent-interface/*.tsbuildinfo
+
