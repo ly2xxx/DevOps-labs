@@ -136,3 +136,10 @@ kubectl get storageclass
 
 kubectl delete -k .
 ./setup-pod-identity.sh cleanup
+
+eksctl delete cluster --name eks-cluster --region us-west-2 --wait
+#Final verify
+aws ec2 describe-volumes --region us-west-2 \
+  --filters Name=status,Values=available \
+  --query "Volumes[].[VolumeId,Size,CreateTime]" \
+  --output table
